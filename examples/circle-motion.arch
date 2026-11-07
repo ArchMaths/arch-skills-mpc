@@ -1,0 +1,13 @@
+# A point travelling around a circle, driven by slider a (one lap in about 4 s).
+@title Circular motion
+
+a=0.1               | min=0 max=1 step=0.0025 mode=forward play
+circle(c,O,2)       | color=blue thickness=4
+point(P,c,a)        | color=red
+segment(op,O,P)     | dash=long
+point(Px,[P,x],0)   | color=gray label="foot"
+segment(drop,P,Px)  | dash=dotted color=gray
+//P moves around the circle as a goes from 0 to 1
+
+@view x=-3.5..3.5 y=-2.6..2.6
+@set gridStyle=dots

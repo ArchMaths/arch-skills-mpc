@@ -1,0 +1,6 @@
+# 3D surfaces and a space curve.
+@title Saddle and sphere
+z=x^2/4-y^2/4               | ref=saddle color=orange opacity=0.6
+x^2+y^2+z^2=9               | ref=ball color=blue opacity=0.7
+x=2*cos(t),y=2*sin(t),z=t/3 | ref=helix color=red thickness=5
+@view 3d azimuth=35 elevation=25

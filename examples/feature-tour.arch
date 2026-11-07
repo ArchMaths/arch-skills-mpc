@@ -1,0 +1,33 @@
+# Tour of most Arch object types and script options.
+@title Arch feature tour
+k=1.5                       | min=0.5 max=3 step=0.01
+f(u)=u^2/4-1
+y=f(x)                      | ref=fcurve color=purple
+x^2+y^2=4                   | ref=circ color=teal
+x^2/9+y^2/4<=1              | ref=ell color=orange opacity=0.25
+x=k*cos(t),y=sin(t)         | ref=pcurve color=pink
+r=root[x^2-2,x,1]
+y=x+range(x,-1,1)           | ref=piece color=brown thickness=6
+/-/(0,0)(1,1)(2,0)/(3,1)(4,0) | ref=pts color=green
+point(A,1,0)                | fixed
+point(B,0,1)
+polyeq(sq,A,B,4)            | color=indigo
+point(V,sq,3)
+point(Q,sq,0,1)             | min=-pi max=pi step=0.02 mode=forward
+point(E,ell,pi/4)
+point(Fp,pts,2)
+point(G,pcurve,1)
+point(H,fcurve,2)
+ellipse(ec,3,2)             | dash=short
+point(T,ec,0.25)
+midpoint(M,A,B)
+rotate(Rot,O,A,90)
+reflect(S,Xaxis,B)
+translate(U,A,1,2)
+length(dAB,A,B)
+angle(ang,A,O,B)
+//A note in red
+@style last | color=red
+@style circ | thickness=5
+@view x=-5..5 y=-3.5..3.5
+@set showPointLabels=true tmin=0 tmax=2*pi

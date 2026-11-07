@@ -1,0 +1,12 @@
+# Intersections and tangent lines on a parabola, using refs instead of guessing func1/func2.
+@title Parabola tangents
+
+y=x^2               | ref=parab color=blue thickness=4
+y=2                 | ref=level color=gray
+point(K,0,-1)       | color=red fixed
+intersect(I,parab,level,1,2)    | color=green
+intersect(J,parab,level,-1,2)   | color=green
+tangent(t1,parab,K,1)           | color=orange
+tangent(t2,parab,K,-1)          | color=orange
+
+@view x=-4..4 y=-2..5

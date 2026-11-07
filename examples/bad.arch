@@ -1,0 +1,7 @@
+# Deliberately broken: used by tests.
+y=a*x
+a=2
+circle(c,O,2)
+point(P,cc,0.25)
+segment(s,A,B)
+sin(
