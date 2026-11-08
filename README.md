@@ -135,3 +135,9 @@ The tool depends on `window.archInstance`, `window.ArchAgentProtocol` and the sa
 - Geometry commands are 2D. 3D supports surfaces, implicit 3D and space curves, plus camera angles.
 - The saved view is pixels-per-unit around a center, so other screen sizes show a slightly different region.
 - Checks catch syntax errors, unknown names, renames and invalid objects. They can't tell whether a valid figure is the one you *meant*, which is what the screenshot and value list are for.
+
+## License
+
+The arch-mcp code and documentation in this repository (`src/`, `test/`, `docs/`, `examples/`, this README) are released under the [MIT License](LICENSE).
+
+`index.html` (the Arch graphing calculator) and `Arch图形计算器语法与对象创建说明.txt` (its syntax manual) are © Arch's authors. They are included so the tool works out of the box and are **not** covered by the MIT License.
