@@ -1,5 +1,10 @@
 # Tour of most Arch object types and script options.
 @title Arch feature tour
+# Measured points come before any curve, and O is a real point (works around an Arch
+# bug that skips length/angle labels otherwise).
+point(O,0,0)                | fixed color=gray
+point(A,1,0)                | fixed
+point(B,0,1)
 k=1.5                       | min=0.5 max=3 step=0.01
 f(u)=u^2/4-1
 y=f(x)                      | ref=fcurve color=purple
@@ -9,8 +14,6 @@ x=k*cos(t),y=sin(t)         | ref=pcurve color=pink
 r=root[x^2-2,x,1]
 y=x+range(x,-1,1)           | ref=piece color=brown thickness=6
 /-/(0,0)(1,1)(2,0)/(3,1)(4,0) | ref=pts color=green
-point(A,1,0)                | fixed
-point(B,0,1)
 polyeq(sq,A,B,4)            | color=indigo
 point(V,sq,3)
 point(Q,sq,0,1)             | min=-pi max=pi step=0.02 mode=forward

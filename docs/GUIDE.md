@@ -49,6 +49,7 @@ intersect(I,parab,c,1,1)
 | `min= max= step=` | Slider range for an **independent variable** (`a=1`) or a **point on an object** (`point(P,c,0)`). Accepts constants like `2*pi`. |
 | `mode=` | Slider animation: `pingpong` (default), `forward`, `reverse`, `once`, `once-reverse`. |
 | `play` | Start animating when the file is opened. |
+| `frame=N` | Frame-by-frame mode: show this object only on frame N (0 = every frame). Needs an `@frames` line. |
 
 Animation speed: Arch advances about `100*step` per second. For a span L in T seconds, use `step=L/(100*T)`. Example: `min=0 max=1 step=0.0025 mode=forward` is one lap of a circle every 4 s.
 
@@ -58,6 +59,10 @@ Animation speed: Arch advances about `100*step` per second. For a span L in T se
 - `@view x=a..b y=c..d`: fit this region (2D). Or `@view center=x,y unit=N` (N = pixels per unit). For 3D: `@view 3d azimuth=35 elevation=25` (degrees). `@view 2d` switches back.
 - `@set name=value ...`: saved document settings only: `showAxes`, `showAxisNumbers`, `showPointLabels` (true/false), `gridStyle` (`grid|dots|polar|hidden`), `tmin`, `tmax` (parametric t range, default -2*pi..2*pi), `geometryMeasurementDisplay`, `showHiddenMath`, `showHiddenGeo`.
 - `@style target | options`: restyle an existing object by name, ref, auto-number, or `last`.
+- `@text x=.. y=.. [size=] [color=] [width=] [height=] [smart|plain] | content`: canvas text box (see below).
+- `@frames total=N fps=F [current=K] [bind=expr]`: turn on frame-by-frame playback (see below).
+- `@operator name(params)` … `@end`: JavaScript operator (see below).
+- `@script` … `@end`: the global ArchScript program (see below). Only one per file.
 
 Always add an `@view` that frames the interesting part; Arch's default is centered at the origin at about 100 px per unit. The saved scale is in pixels per unit, so the visible region is somewhat larger or smaller on other screens.
 
@@ -150,7 +155,100 @@ Built-ins: `O` (origin, unless you create your own O), `Xaxis`, `Yaxis`. Example
 - Drive several objects together: `a=0 | min=0 max=1 step=0.0025 mode=forward play`, then use `a` in them (`point(P,c,a)`, `point(Q,cos(2*pi*a),sin(2*pi*a))`).
 - Animate one point on its own: put the slider options on the point on an object, e.g. `point(P,c,0) | min=0 max=1 step=0.005 mode=forward play`. Playing a point replaces an expression parameter like `a` with a number, so do not combine both approaches on one point.
 
-### Common mistakes
+## Canvas text: `@text`
+
+```
+@text x=-4.5 y=3.6 size=0.45 color=indigo | Construction steps
+@text at=0.5,-1.2 size=0.35 | P = ({value(a)}, {value(f(a))})\nslope {if(f(a)-1),then(≥ 1),else(< 1)}
+```
+
+- A text box placed on the graph. `x,y` is its **top-left corner** in graph coordinates. `size` is the font height in graph units (default 0.5), so text zooms with the graph.
+- The box clips its text. The tool sizes it to fit, with room for live values, unless you give `width=`/`height=` (graph units).
+- `\n` (backslash n, typed literally) starts a new line.
+- **Smart text** (switched on automatically when the content has `{value(` or `{if(`; force with `smart`, switch off with `plain`):
+  - `{value(expr)}`: live value of any Arch expression (variables, functions, operators), 6 significant digits.
+  - `{if(cond),then(text),else(text)}`: cond counts as true when its value is ≥ 0, e.g. `{if(a-2),then(a ≥ 2),else(a < 2)}`.
+  - `/b` bold, `/i` italic, `/r` regular, from that point on.
+- The report shows each box as it currently reads, so you can check the values.
+- `//text` lines are different: they are notes in the object list, not on the graph.
+
+## Frame-by-frame animation: `@frames` and `frame=`
+
+```
+@frames total=3 fps=1
+point(L,-3,-2)   | frame=1
+point(R,-1,-2)   | frame=1
+segment(s,L,R)   | frame=2
+circle(c,L,R)    | frame=3
+```
+
+- Works like slides. Arch's play button steps the current frame from its value to `total` at `fps` frames per second, then stops.
+- An object with `frame=N` is drawn only on frame N; `frame=0` (the default) means every frame. **Frame 0 shows everything**, so the file opens showing the whole construction unless you set `current=`.
+- To show cumulative steps (step 2 keeps step 1), give later frames their own copies or use a slider instead; Arch shows exactly one frame number at a time.
+- `bind=expr` ties the current frame to an expression, e.g. `a=0 | min=0 max=3 step=0.01` then `@frames total=3 bind=floor(a)`. Define the variables first.
+- `//` text lines and `@text` boxes are shown on every frame.
+
+## JavaScript operators: `@operator`
+
+```
+@operator clamp(v, lo, hi)
+  return Math.min(hi, Math.max(lo, v));
+@end
+sq(u)={ return u*u; }          # one-line form, as typed in Arch
+y=clamp(2*sin(x),-1,1)
+```
+
+- The body is a JavaScript function body that **returns a number**. Parameters are plain numbers. Use `Math.*`.
+- After definition the operator works in every expression, slider, geometry argument and `{value(...)}`.
+- Arch calls it thousands of times while drawing, so keep it fast and pure: no timers, no DOM, no `arch` calls.
+- If it throws, Arch silently turns that value into NaN. The tool reports how often it threw. An infinite loop makes the build time out.
+- Names follow the usual rules: unique, case-insensitive, not a built-in.
+- **Operators run in the user's Arch when they open the file**, so only write ordinary math code.
+
+## Global program: `@script`
+
+```
+@script
+let t = 0;
+setInterval(() => {
+  t += 0.03;
+  arch.valuesetting('a', 1.5 + 1.5 * Math.sin(t));
+}, 30);
+@end
+```
+
+- Stored in the file. **Arch never runs it on open; the user presses Run** in the code panel. Use it for things a slider cannot do: scripted motion, several values moving together, timed sequences, reactions to clicks.
+- Create the objects with normal script lines. Use the program to change them: running `arch.create` adds new objects every time the user presses Run.
+- The tool syntax-checks it, and also **runs it for 2 seconds in an isolated copy** (no network, no file access) and reports runtime errors, plus a second screenshot. The saved file is never modified by that test run.
+- It is JavaScript in strict mode with `arch`, `setInterval`, `clearInterval`, `setTimeout`, `clearTimeout`, `addEventListener` provided. Stopping the script clears its timers, listeners and pen drawings.
+
+### The `arch` API (most useful parts)
+
+Calls marked *(async)* take effect on the next tick, so do not read their result on the same line.
+
+| Call | Does |
+|---|---|
+| `arch.valuesetting(name, value, max, min, step, playState, playMode)` | Set an independent variable; trailing args optional. **Note the order: max before min.** |
+| `arch.calc(expr)` | Evaluate an Arch expression to a number, e.g. `arch.calc('a^2')`. |
+| `arch.coordinate(pointName, 'x'\|'y')` | Coordinate of a point (exact name, case-sensitive). `arch.coordinate(0,'x')` gives the x of the canvas center. |
+| `arch.create(expr)` *(async)* | Add an object, same syntax as script lines. |
+| `arch.createfunc(expr, h, s, b, a, visible, thickness)` / `arch.creategeo(...)` *(async)* | Add a curve / geometry object with color (HSB 0..100, `a` = transparency). **Pass `visible` as 1**; anything else hides it. |
+| `arch.geosetting(name, h, s, b, a, visible, thickness)` *(async)* | Restyle a geometry object (`visible` 1/0). |
+| `arch.setcolor(reference, h, s, b, a)` | Recolor any object by name or auto-number. |
+| `arch.objects.list()` / `.get(ref)` / `.style(ref, {color, visible, thickness})` / `.remove(ref)` | Inspect and style objects (`thickness` 1..10 here). |
+| `arch.deletefunc(id)` / `arch.deletegeo(name)` / `arch.clearall()` *(async)* | Delete objects. |
+| `arch.txt(content, h, s, b, a, fontSize, x1, y1, x2, y2)` *(async)* | Add a text box from (x1,y1) top-left to (x2,y2). |
+| `arch.edittxt(oldContent, newContent, h, s, b, a, fontSize, x1, y1, x2, y2)` *(async)* | Change a text box found by its current content; pass `undefined` to keep a field. |
+| `arch.deletetxt(content)` *(async)* | Remove text boxes with that content. |
+| `arch.setcanvas(x, y, zoom)` | Center the 2D view on (x,y) at `zoom` pixels per unit. |
+| `arch.setview({center:{x,y}, unit})` / `arch.getview()` | View control (also `dimension: '2d'\|'3d'`). |
+| `arch.setcamera({azimuth, elevation})` / `arch.rotatecamera(right, up)` | 3D camera, degrees. |
+| `arch.setsetting(name, value)` / `arch.getsetting(name)` | Settings such as `showAxes`, `gridStyle`. |
+| `arch.message(text, seconds)` | Show a short message. |
+| `arch.pencolor(h,s,b,a)`, `arch.penthickness(t)`, `arch.pendown()`, `arch.penposition(x,y)`, `arch.penup()`, `arch.clearpen()` | Turtle-style drawing in graph coordinates (not saved with the file). |
+| `arch.fill(n, x1,y1, …, xn,yn, h,s,b,a)` | Filled polygon with the pen layer. |
+
+## Common mistakes
 1. Referring to `func1`/`eq1` by guessing: use `ref=`.
 2. Name clashes from case-insensitivity (`A` vs `a`, `F` vs `f`), or with polyeq's auto-created vertices.
 3. Using an object before creating it (`circle(c,C,P)` needs P first).
@@ -161,3 +259,7 @@ Built-ins: `O` (origin, unless you create your own O), `Xaxis`, `Yaxis`. Example
 8. Expecting a slider from `a=2*pi`: write `a=6.283` or set min/max on a literal.
 9. JavaScript syntax (`&&`, `%`, `!`, `|x|`, `**`).
 10. Chained inequalities or several relations on one line.
+11. `frame=` without an `@frames` line (it has no effect), or expecting frame 0 to hide framed objects.
+12. `arch.createfunc(...)` without `visible` = 1, or `valuesetting` with min and max swapped.
+13. Creating objects inside `@script` that the scene script already creates (duplicates on every Run).
+14. Arch bug: `length(...)` and `angle(...)` labels are not drawn if a measured point is created after any curve, equation or point list, or is the built-in `O`. Create the measured points first and use `point(O,0,0)` rather than the built-in origin.

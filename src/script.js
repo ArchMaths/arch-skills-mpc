@@ -82,11 +82,11 @@ function tokenizeOptions(text, line) {
 }
 
 const OBJECT_OPTIONS = ['ref', 'color', 'opacity', 'thickness', 'hidden', 'visible', 'dash', 'label',
-    'min', 'max', 'step', 'mode', 'play', 'fixed'];
+    'min', 'max', 'step', 'mode', 'play', 'fixed', 'frame'];
 
 function parseObjectOptions(text, line, {allowRef = true} = {}) {
     const style = {}, slider = {};
-    let ref, fixed = false;
+    let ref, frame, fixed = false;
     for (const [key, raw] of tokenizeOptions(text, line)) {
         const k = key.toLowerCase();
         const need = () => {
@@ -144,11 +144,17 @@ function parseObjectOptions(text, line, {allowRef = true} = {}) {
         }
         case 'play': slider.play = true; break;
         case 'fixed': fixed = true; break;
+        case 'frame': {
+            const f = Number(need());
+            if (!Number.isInteger(f) || f < 0) throw new ScriptError(line, 'frame must be a whole number >= 0 (0 = shown on every frame).');
+            frame = f;
+            break;
+        }
         default:
             throw new ScriptError(line, `Unknown option "${key}". Allowed: ${OBJECT_OPTIONS.join(', ')}.`);
         }
     }
-    return {ref, style, slider, fixed};
+    return {ref, style, slider, fixed, frame};
 }
 
 function parseRange(value, line, axis) {
@@ -221,21 +227,121 @@ function stripComment(text) {
     return text;
 }
 
-// Returns {steps, title}. Throws ScriptError with a 1-based line number.
+const JS_IDENT = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
+// name(params)={ JS body } typed on one line, as in Arch's own input box.
+const ONE_LINE_OPERATOR = /^([A-Za-z_]\w*)\s*\(([^)]*)\)\s*=\s*\{([\s\S]*)\}\s*$/;
+
+function parseOperatorHeader(name, paramText, line) {
+    if (!/^[A-Za-z_]\w*$/.test(name)) throw new ScriptError(line, `Operator name "${name}" must be letters, digits or _.`);
+    const params = paramText.trim() ? paramText.split(',').map(p => p.trim()) : [];
+    for (const param of params)
+        if (!JS_IDENT.test(param)) throw new ScriptError(line, `Operator parameter "${param}" is not a valid JavaScript name.`);
+    if (new Set(params.map(p => p.toLowerCase())).size !== params.length) throw new ScriptError(line, 'Operator parameters must be distinct.');
+    return params;
+}
+
+function parseText(rest, line) {
+    const bar = rest.indexOf('|');
+    if (bar < 0) throw new ScriptError(line, '@text needs the text after "|", e.g. @text x=-4 y=3 | Hello');
+    const content = rest.slice(bar + 1).trim();
+    if (!content) throw new ScriptError(line, '@text has no content after "|".');
+    const text = {content, size: 0.5, smart: /\{value\(|\{if\(/.test(content)};
+    const number = (raw, key, positive) => {
+        const n = Number(raw);
+        if (!Number.isFinite(n) || (positive && n <= 0)) throw new ScriptError(line, `@text ${key} must be a ${positive ? 'positive ' : ''}number.`);
+        return n;
+    };
+    for (const [key, raw] of tokenizeOptions(rest.slice(0, bar), line)) {
+        const k = key.toLowerCase();
+        if (k === 'smart' && raw === null) { text.smart = true; continue; }
+        if (k === 'plain' && raw === null) { text.smart = false; continue; }
+        if (raw === null) throw new ScriptError(line, `@text option "${key}" needs a value.`);
+        switch (k) {
+        case 'x': text.x = number(raw, 'x'); break;
+        case 'y': text.y = number(raw, 'y'); break;
+        case 'at': {
+            const p = raw.split(',').map(Number);
+            if (p.length !== 2 || !p.every(Number.isFinite)) throw new ScriptError(line, 'at must look like at=-4,3');
+            [text.x, text.y] = p;
+            break;
+        }
+        case 'width': text.width = number(raw, 'width', true); break;
+        case 'height': text.height = number(raw, 'height', true); break;
+        case 'size': text.size = number(raw, 'size', true); break;
+        case 'color': text.color = {...parseColor(raw, line), ...(text.color && 'a' in text.color ? {a: text.color.a} : {})}; break;
+        case 'opacity': {
+            const o = Number(raw);
+            if (!(o >= 0 && o <= 1)) throw new ScriptError(line, 'opacity must be between 0 and 1.');
+            text.color = {...(text.color || {}), a: Math.round((1 - o) * 1000) / 10};
+            break;
+        }
+        default:
+            throw new ScriptError(line, `Unknown @text option "${key}". Allowed: x, y (or at=x,y), width, height, size, color, opacity, smart, plain.`);
+        }
+    }
+    if (text.x === undefined || text.y === undefined) throw new ScriptError(line, '@text needs the top-left corner: x= and y= (or at=x,y), in graph coordinates.');
+    return text;
+}
+
+function parseFrames(rest, line) {
+    const frames = {};
+    for (const [key, raw] of tokenizeOptions(rest, line)) {
+        const k = key.toLowerCase();
+        if (raw === null) throw new ScriptError(line, `@frames option "${key}" needs a value.`);
+        const whole = (min) => {
+            const n = Number(raw);
+            if (!Number.isInteger(n) || n < min) throw new ScriptError(line, `@frames ${k} must be a whole number >= ${min}.`);
+            return n;
+        };
+        switch (k) {
+        case 'total': frames.total = whole(1); break;
+        case 'current': frames.current = whole(0); break;
+        case 'fps': {
+            const n = Number(raw);
+            if (!(n > 0)) throw new ScriptError(line, '@frames fps must be a positive number.');
+            frames.fps = n;
+            break;
+        }
+        case 'bind': frames.bind = raw.trim(); break;
+        default:
+            throw new ScriptError(line, `Unknown @frames option "${key}". Allowed: total, fps, current, bind.`);
+        }
+    }
+    if (frames.total !== undefined && frames.current !== undefined && frames.current > frames.total)
+        throw new ScriptError(line, '@frames current must not exceed total.');
+    return frames;
+}
+
+// Returns {steps, title, script}. Throws ScriptError with a 1-based line number.
 export function parseScript(source) {
     if (typeof source !== 'string') throw new ScriptError(0, 'Script must be text.');
     const steps = [];
-    let title;
-    source.replace(/\r\n?/g, '\n').split('\n').forEach((rawLine, i) => {
+    let title, script;
+    const lines = source.replace(/\r\n?/g, '\n').split('\n');
+
+    // Collects raw lines up to a line that is exactly "@end".
+    const readBlock = (start, what) => {
+        const body = [];
+        for (let j = start + 1; j < lines.length; j++) {
+            if (lines[j].trim().toLowerCase() === '@end') return {body: body.join('\n').replace(/^\n+|\s+$/g, ''), next: j};
+            body.push(lines[j].replace(/\s+$/, ''));
+        }
+        throw new ScriptError(start + 1, `${what} block is missing its closing @end line.`);
+    };
+
+    for (let i = 0; i < lines.length; i++) {
         const line = i + 1;
-        let text = rawLine.trim();
-        if (!text || text.startsWith('#')) return;
+        let text = lines[i].trim();
+        if (!text || text.startsWith('#')) continue;
         if (text.startsWith('//')) {
             steps.push({kind: 'create', line, expr: text, style: {}, slider: {}, text: true});
-            return;
+            continue;
         }
-        text = stripComment(text);
-        if (!text) return;
+        const oneLine = ONE_LINE_OPERATOR.exec(text);
+        if (oneLine) {
+            steps.push({kind: 'operator', line, name: oneLine[1], params: parseOperatorHeader(oneLine[1], oneLine[2], line), body: oneLine[3].trim()});
+            continue;
+        }
         if (text.startsWith('@')) {
             const m = /^@(\w+)\s*(.*)$/.exec(text);
             const directive = m ? m[1].toLowerCase() : '';
@@ -244,32 +350,67 @@ export function parseScript(source) {
             case 'title':
                 if (!rest.trim()) throw new ScriptError(line, '@title needs a name.');
                 title = rest.trim();
-                return;
+                continue;
+            case 'operator': {
+                const h = /^([A-Za-z_]\w*)\s*\(([^)]*)\)\s*$/.exec(rest.trim());
+                if (!h) throw new ScriptError(line, '@operator needs a header like: @operator clamp(v, lo, hi)');
+                const params = parseOperatorHeader(h[1], h[2], line);
+                const {body, next} = readBlock(i, '@operator');
+                if (!body.trim()) throw new ScriptError(line, `@operator ${h[1]} has an empty body; write JavaScript that returns a number.`);
+                steps.push({kind: 'operator', line, name: h[1], params, body});
+                i = next;
+                continue;
+            }
+            case 'script': {
+                if (rest.trim()) throw new ScriptError(line, '@script takes no options; put the program on the following lines and close with @end.');
+                if (script) throw new ScriptError(line, `Only one @script block is allowed (the first is on line ${script.line}).`);
+                const {body, next} = readBlock(i, '@script');
+                if (!body.trim()) throw new ScriptError(line, '@script block is empty.');
+                script = {line, text: body};
+                i = next;
+                continue;
+            }
+            case 'end':
+                throw new ScriptError(line, '@end without a matching @operator or @script.');
+            case 'text':
+                // Content is verbatim: no comment stripping, so "#" and "|" may appear in it.
+                steps.push({kind: 'text', line, ...parseText(rest, line)});
+                continue;
+            }
+            text = stripComment(text);
+            const m2 = /^@(\w+)\s*(.*)$/.exec(text);
+            const rest2 = m2 ? m2[2] : '';
+            switch (directive) {
             case 'view':
-                steps.push({kind: 'view', line, view: parseView(rest, line)});
-                return;
+                steps.push({kind: 'view', line, view: parseView(rest2, line)});
+                continue;
             case 'set':
-                steps.push({kind: 'set', line, settings: parseSettings(rest, line)});
-                return;
+                steps.push({kind: 'set', line, settings: parseSettings(rest2, line)});
+                continue;
+            case 'frames':
+                steps.push({kind: 'frames', line, frames: parseFrames(rest2, line)});
+                continue;
             case 'style': {
-                const bar = rest.indexOf('|');
-                const target = (bar < 0 ? rest : rest.slice(0, bar)).trim();
+                const bar = rest2.indexOf('|');
+                const target = (bar < 0 ? rest2 : rest2.slice(0, bar)).trim();
                 if (!target) throw new ScriptError(line, '@style needs a target: @style <name|ref|last> | color=red');
                 if (bar < 0) throw new ScriptError(line, '@style needs options after "|", e.g. @style P | color=red');
-                const opts = parseObjectOptions(rest.slice(bar + 1), line, {allowRef: false});
+                const opts = parseObjectOptions(rest2.slice(bar + 1), line, {allowRef: false});
                 steps.push({kind: 'style', line, target, ...opts});
-                return;
+                continue;
             }
             default:
-                throw new ScriptError(line, `Unknown directive "${text.split(/\s/)[0]}". Use @title, @view, @set or @style.`);
+                throw new ScriptError(line, `Unknown directive "${text.split(/\s/)[0]}". Use @title, @view, @set, @style, @text, @frames, @operator or @script.`);
             }
         }
+        text = stripComment(text);
+        if (!text) continue;
         const bar = text.indexOf('|');
         const expr = (bar < 0 ? text : text.slice(0, bar)).trim();
         if (!expr) throw new ScriptError(line, 'Missing expression before "|".');
         if (/^\$multi/i.test(expr)) throw new ScriptError(line, 'Write one expression per line instead of a $multi string.');
         const opts = bar < 0 ? {style: {}, slider: {}, fixed: false} : parseObjectOptions(text.slice(bar + 1), line);
         steps.push({kind: 'create', line, expr, ...opts});
-    });
-    return {steps, title};
+    }
+    return {steps, title, script};
 }

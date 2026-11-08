@@ -16,12 +16,20 @@ const abs = path => resolve(process.cwd(), path);
 
 const INSTRUCTIONS = `Arch is a GeoGebra-like graphing calculator. These tools turn a short scene script into a real Arch save file (.txt) by running the actual Arch engine headlessly.
 Workflow: call arch_guide once to learn the script format and Arch syntax; write a script; call arch_check and read the errors, warnings, object values and screenshot; fix and re-check; then arch_build to write the file. To modify an existing save file, call arch_decompile first, edit the script, then build.
-Never hand-write Arch save-file JSON: it contains parser-computed fields and will not load correctly.`;
+Never hand-write Arch save-file JSON: it contains parser-computed fields and will not load correctly.
+Scripts can also define JavaScript operators (@operator), canvas text (@text), frame-by-frame steps (@frames, frame=) and a global program (@script, test-run for 2 s in an isolated page); see arch_guide.`;
 
 const server = new McpServer({name: 'arch', version: '0.1.0'}, {instructions: INSTRUCTIONS});
 
 const text = value => ({type: 'text', text: value});
 const image = png => ({type: 'image', data: Buffer.from(png).toString('base64'), mimeType: 'image/png'});
+// Screenshot 1 shows the file as opened; screenshot 2 (only with @script) shows it after the program ran.
+function images(result) {
+    const out = [];
+    if (result.png) out.push(image(result.png));
+    if (result.scriptPng) out.push(text(`Screenshot 2: the same file after running its @script program for ${result.scriptPreview?.seconds ?? 2} s (users start it with Run).`), image(result.scriptPng));
+    return out;
+}
 
 function scriptFrom({script, script_path}) {
     if (script && script_path) throw new Error('Pass either script or script_path, not both.');
@@ -32,7 +40,8 @@ function scriptFrom({script, script_path}) {
 
 const scriptInput = {
     script: z.string().optional().describe('Scene script text (one Arch expression per line; see arch_guide).'),
-    script_path: z.string().optional().describe('Path to a .arch scene script file, instead of script.')
+    script_path: z.string().optional().describe('Path to a .arch scene script file, instead of script.'),
+    script_preview: z.boolean().optional().describe('Test-run the @script program for 2 s in an isolated page and report runtime errors plus a second screenshot (default true).')
 };
 
 server.registerTool('arch_guide', {
@@ -48,14 +57,12 @@ server.registerTool('arch_guide', {
 
 server.registerTool('arch_check', {
     title: 'Check an Arch scene script',
-    description: 'Runs a scene script in the real Arch engine without writing a file. Returns per-line errors and warnings, every object with its computed value (coordinates, equations, measurements), and a screenshot of the result as it will look when the saved file is opened. Use it to iterate until there are no errors and the picture is right.',
+    description: 'Runs a scene script in the real Arch engine without writing a file. Returns per-line errors and warnings, every object with its computed value (coordinates, equations, measurements), text boxes as currently shown, frame settings, and a screenshot of the result as it will look when the saved file is opened (plus a second screenshot after test-running any @script). Use it to iterate until there are no errors and the picture is right.',
     inputSchema: {...scriptInput, screenshot: z.boolean().optional().describe('Include a screenshot (default true).')},
     annotations: {readOnlyHint: true}
 }, async args => {
-    const result = await engine.run(scriptFrom(args), {screenshot: args.screenshot !== false, verify: true});
-    const content = [text(formatReport(result))];
-    if (result.png) content.push(image(result.png));
-    return {content};
+    const result = await engine.run(scriptFrom(args), {screenshot: args.screenshot !== false, verify: true, scriptPreview: args.script_preview !== false});
+    return {content: [text(formatReport(result)), ...images(result)]};
 });
 
 server.registerTool('arch_build', {
@@ -69,7 +76,7 @@ server.registerTool('arch_build', {
     }
 }, async args => {
     const wantPng = args.screenshot !== false || Boolean(args.screenshot_path);
-    const result = await engine.run(scriptFrom(args), {screenshot: wantPng, verify: true});
+    const result = await engine.run(scriptFrom(args), {screenshot: wantPng, verify: true, scriptPreview: args.script_preview !== false});
     const out = abs(args.output_path);
     let shot;
     if (result.ok) {
@@ -82,7 +89,7 @@ server.registerTool('arch_build', {
         }
     }
     const content = [text(formatReport(result, {written: result.ok ? out : null, screenshot: shot}))];
-    if (result.png && args.screenshot !== false) content.push(image(result.png));
+    if (args.screenshot !== false) content.push(...images(result));
     return {content, isError: !result.ok};
 });
 

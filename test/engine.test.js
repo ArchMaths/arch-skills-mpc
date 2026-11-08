@@ -78,3 +78,73 @@ test('decompiled save files rebuild to the same objects', async () => {
             assert.deepEqual(b.entries[i][field], entry[field], `${entry.expr} ${field}`);
     });
 });
+
+test('operators, text boxes, frames and the global script reach the save file', async () => {
+    const result = await engine.run(example('js-frames-text.arch'));
+    assert.deepEqual(result.errors, []);
+    assert.equal(byName(result, 'P').details, '(1.000, 1.000)');           // clamp(2 sin 1, -1, 1) = 1
+    assert.ok(result.scriptPng && result.scriptPng.length > 10000, 'second screenshot after running @script');
+    assert.deepEqual(result.scriptPreview, {seconds: 2, problems: []});
+    assert.equal(result.texts[1].shown, 'P = (1, 1)\\nsq(a) = 1');
+    const state = JSON.parse(result.json);
+    assert.deepEqual([state.showPlaybackControls, state.totalFrames, state.playbackFPS, state.currentFrame], [true, 3, 1, 0]);
+    assert.deepEqual(state.entries.filter(e => e.displayFrame).map(e => [e.name, e.displayFrame]), [['L', 1], ['R', 1], ['s', 2], ['c', 3]]);
+    assert.deepEqual(state.entries.filter(e => e.bodyJs).map(e => e.name), ['clamp', 'sq']);
+    assert.match(state.globalScript, /arch\.valuesetting\('a'/);
+    assert.equal(state.annotations.length, 2);
+    assert.ok(state.annotations[1].content.startsWith('<smart>'));
+});
+
+test('JavaScript problems are reported, and loops time out', async () => {
+    const run = src => engine.run(src, {screenshot: false, timeoutMs: 4000});
+    const cases = [
+        ['y=x\n@script\nundefinedThing.go();\n@end', 2, /undefinedThing is not defined/],
+        ['y=x\n@script\nsetTimeout(() => { arch.nosuchfunction(1); }, 100);\n@end', 2, /arch\.nosuchfunction is not a function/],
+        ['y=x\n@script\nlet = = 3;\n@end', 2, /syntax error/],
+        ['y=x\n@script\nwhile (true) {}\n@end', 2, /did not finish within 4 s/],
+        ['@operator bad(u)\n  return u +* 2;\n@end', 1, /syntax error in operator bad/],
+        ['@operator spin(u)\n  while (true) {}\n@end\ny=spin(x)', 1, /did not finish within 4 s.*spin \(line 1\)/],
+        ['@operator sin(u)\n  return u;\n@end', 1, /built-in name/],
+    ];
+    for (const [src, line, pattern] of cases) {
+        const result = await run(src);
+        assert.equal(result.ok, false, src);
+        assert.equal(result.errors[0].line, line, src);
+        assert.match(result.errors[0].message, pattern, src);
+    }
+    const thrower = await run('@operator boom(u)\n  throw new Error("kaboom");\n@end\ny=boom(x)');
+    assert.ok(thrower.ok);
+    assert.ok(thrower.warnings.some(w => w.line === 1 && /boom threw "kaboom" \d+ time/.test(w.message)));
+});
+
+test('the page can reach neither local files nor the network', async () => {
+    const slot = await engine.acquire();
+    try {
+        const probe = await slot.page.evaluate(async () => {
+            const tryFetch = url => fetch(url).then(() => 'reached', () => 'blocked');
+            return {secure: isSecureContext, file: await tryFetch('file:///etc/hosts'), net: await tryFetch('https://example.com/')};
+        });
+        assert.deepEqual(probe, {secure: true, file: 'blocked', net: 'blocked'});
+    } finally {
+        await slot.context.close();
+    }
+});
+
+test('decompiling a file with operators, frames, text and a script rebuilds identically', async () => {
+    const first = await engine.run(example('js-frames-text.arch'), {screenshot: false});
+    const second = await engine.run(decompile(first.json).script, {screenshot: false});
+    assert.deepEqual(second.errors, []);
+    const pick = s => JSON.stringify([s.globalScript, s.showPlaybackControls, s.totalFrames, s.playbackFPS, s.currentFrame,
+        s.annotations, s.entries.map(e => [e.expr, e.displayFrame, e.bodyJs, e.color, e.min, e.max, e.step])]);
+    assert.equal(pick(JSON.parse(second.json)), pick(JSON.parse(first.json)));
+});
+
+test('errors inside Arch itself are reported once, as an Arch bug with a workaround', async () => {
+    const result = await engine.run('y=x\npoint(A,0,0)\npoint(B,1,0)\nlength(d,A,B)', {screenshot: false});
+    assert.ok(result.ok, 'file stays valid');
+    const internal = result.warnings.filter(w => /Arch hit an internal error in drawMeasurements/.test(w.message));
+    assert.equal(internal.length, 1);
+    assert.match(internal[0].message, /create the measured points first/i);
+    const fixed = await engine.run('point(A,0,0)\npoint(B,1,0)\ny=x\nlength(d,A,B)', {screenshot: false});
+    assert.deepEqual(fixed.warnings, []);
+});

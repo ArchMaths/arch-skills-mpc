@@ -84,5 +84,83 @@ test('decompile maps save fields back to script options', () => {
     assert.match(script, /^\/\/hello$/m);
     assert.match(script, /^@view center=1,2 unit=80$/m);
     assert.equal(warnings.length, 1);
-    assert.match(warnings[0], /1 drawing annotation/);
+    assert.match(warnings[0], /1 annotation\(s\) \(1 pen\)/);
+});
+
+test('@operator, one-line operators and @script blocks', () => {
+    const {steps, script} = parseScript(`@operator clamp(v, lo, hi)
+  // keep # and | inside JS
+  return v > hi || v < lo ? Math.min(hi, Math.max(lo, v)) : v; # not a comment
+@end
+sq(u)={ return u|0 ? u*u : 0; }
+@script
+let t = 0;   # also kept
+setInterval(() => { t++; }, 30);
+@end
+y=clamp(x,-1,1)`);
+    assert.equal(steps[0].kind, 'operator');
+    assert.deepEqual(steps[0].params, ['v', 'lo', 'hi']);
+    assert.match(steps[0].body, /\/\/ keep # and \| inside JS\n {2}return v > hi \|\| v < lo/);
+    assert.deepEqual([steps[1].kind, steps[1].name, steps[1].body], ['operator', 'sq', 'return u|0 ? u*u : 0;']);
+    assert.equal(script.line, 6);
+    assert.equal(script.text, 'let t = 0;   # also kept\nsetInterval(() => { t++; }, 30);');
+    assert.equal(steps[2].expr, 'y=clamp(x,-1,1)');
+    assert.equal(steps[2].line, 10);
+});
+
+test('block errors', () => {
+    throwsAtLine('@script\nlet a = 1;', 1, /missing its closing @end/);
+    throwsAtLine('@operator f(u)\nreturn u;', 1, /missing its closing @end/);
+    throwsAtLine('y=x\n@end', 2, /without a matching/);
+    throwsAtLine('@operator f(u, u)\nreturn u;\n@end', 1, /distinct/);
+    throwsAtLine('@operator f(u)\n\n@end', 1, /empty body/);
+    throwsAtLine('@script\nx();\n@end\n@script\ny();\n@end', 4, /Only one @script/);
+});
+
+test('@text, @frames and frame=', () => {
+    const {steps} = parseScript(`@text x=-4 y=3 size=0.4 color=blue | Hello | world # not a comment
+@text at=1,2 | a = {value(a)}\\nnext
+@text x=0 y=0 plain | literal {value(a)}
+@frames total=5 fps=2 current=1 bind="floor(a * 5)"
+point(P,1,1) | frame=2`);
+    assert.deepEqual(steps[0], {kind: 'text', line: 1, content: 'Hello | world # not a comment', size: 0.4, smart: false, x: -4, y: 3, color: {h: 57.8, s: 86.9, b: 89.8}});
+    assert.deepEqual([steps[1].x, steps[1].y, steps[1].smart, steps[1].content], [1, 2, true, 'a = {value(a)}\\nnext']);
+    assert.equal(steps[2].smart, false);
+    assert.deepEqual(steps[3].frames, {total: 5, fps: 2, current: 1, bind: 'floor(a * 5)'});
+    assert.equal(steps[4].frame, 2);
+    throwsAtLine('@text x=1 | no y', 1, /top-left corner/);
+    throwsAtLine('@text x=1 y=2', 1, /needs the text after/);
+    throwsAtLine('@frames total=2 current=3', 1, /must not exceed/);
+    throwsAtLine('point(P,1,1) | frame=1.5', 1, /whole number/);
+});
+
+test('decompile covers operators, frames, text boxes and the global script', () => {
+    const save = {
+        name: 'X', version: 12200, scale: 50, viewportCenter2D: {x: 0, y: 0},
+        showPlaybackControls: true, totalFrames: 4, playbackFPS: 2, currentFrame: 1, frameExpr: 'floor(a * 4)',
+        globalScript: 'let t = 0;\nsetInterval(() => t++, 30);',
+        customAdvancedFunctions: [{name: 'twice', params: ['u'], bodyJsString: 'return 2*u;'}],
+        annotations: [
+            {type: 'text', content: '<smart>a = {value(a)}', x: 1, y: 2, width: 3, height: 0.8, fontSize: 0.4, color: {h: 0, s: 0, b: 0, a: 0}},
+            {type: 'text', content: 'literal {value(a)}', x: 0, y: 0, width: 4, height: 1, fontSize: 0.5, color: {h: 60, s: 100, b: 80, a: 0}},
+            {type: 'pen', path: []}],
+        entries: [
+            {type: 'advanced_custom_function_definition', name: 'clamp', params: ['v', 'lo', 'hi'], bodyJs: '\n  return Math.min(hi, Math.max(lo, v));\n'},
+            {type: 'geometry', expr: 'point(P,1,1)', name: 'P', geometryType: 'point', displayFrame: 2, color: {h: 0, s: 0, b: 0, a: 0}}
+        ]
+    };
+    const {script, warnings} = decompile(JSON.stringify(save));
+    assert.match(script, /^@operator twice\(u\)\nreturn 2\*u;\n@end$/m);
+    assert.match(script, /^@operator clamp\(v, lo, hi\)\n {2}return Math\.min\(hi, Math\.max\(lo, v\)\);\n@end$/m);
+    assert.match(script, /^point\(P,1,1\) {2}\| frame=2$/m);
+    assert.match(script, /^@frames total=4 fps=2 current=1 bind="floor\(a \* 4\)"$/m);
+    assert.match(script, /^@text x=1 y=2 width=3 height=0\.8 size=0\.4 smart \| a = \{value\(a\)\}$/m);
+    assert.match(script, /^@text x=0 y=0 width=4 height=1 size=0\.5 color=hsb\(60,100,80\) plain \| literal \{value\(a\)\}$/m);
+    assert.match(script, /^@script\nlet t = 0;\nsetInterval\(\(\) => t\+\+, 30\);\n@end$/m);
+    assert.deepEqual(warnings, ['Dropped 1 annotation(s) (1 pen); scripts cannot express drawings, images, PDFs or audio.']);
+    // The decompiled script must itself parse.
+    const parsed = parseScript(script);
+    assert.equal(parsed.steps.filter(s => s.kind === 'operator').length, 2);
+    assert.equal(parsed.steps.filter(s => s.kind === 'text').length, 2);
+    assert.ok(parsed.script);
 });

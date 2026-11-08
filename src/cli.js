@@ -16,15 +16,18 @@ Usage:
 
 Options:
   -o, --out <path>   output file (default: scene.arch -> scene.txt)
-  --png <path>       also save a screenshot of the result
+  --png <path>       also save a screenshot of the result (and <name>-script.png
+                     after running the @script program, if there is one)
   --no-verify        skip reloading the saved file to confirm it round-trips
+                     (this also skips the @script preview)
+  --no-script-preview  store @script without test-running it
   --html <path>      Arch index.html to use (default: ARCH_HTML or ./index.html)
   --json             print the full result as JSON
 
 Use "-" as the script path to read from stdin. Exit code 1 means the script has errors.`;
 
 function parseArgs(argv) {
-    const args = {verify: true};
+    const args = {verify: true, scriptPreview: true};
     for (let i = 0; i < argv.length; i++) {
         const a = argv[i];
         const value = () => {
@@ -39,6 +42,7 @@ function parseArgs(argv) {
         else if (a === '--png') args.png = value();
         else if (a === '--html') args.html = value();
         else if (a === '--no-verify') args.verify = false;
+        else if (a === '--no-script-preview') args.scriptPreview = false;
         else if (a === '--json') args.json = true;
         else if (a.startsWith('-') && a !== '-') throw new Error(`Unknown option ${a}`);
         else if (args.input === undefined) args.input = a;
@@ -78,14 +82,16 @@ async function main() {
 
     const engine = new ArchEngine(args.html ? {htmlPath: args.html} : {});
     try {
-        const result = await engine.run(readInput(args.input), {screenshot: Boolean(args.png), verify: args.verify});
+        const result = await engine.run(readInput(args.input), {screenshot: Boolean(args.png), verify: args.verify, scriptPreview: args.scriptPreview});
         if (args.png && result.png) writeFileSync(resolve(args.png), result.png);
+        const scriptPng = args.png && result.scriptPng ? args.png.replace(/(\.png)?$/i, '-script.png') : undefined;
+        if (scriptPng) writeFileSync(resolve(scriptPng), result.scriptPng);
         if (result.ok && !check) writeFileSync(resolve(out), result.json);
         if (args.json) {
-            const {png, json, ...rest} = result;
+            const {png, scriptPng: _shot, json, ...rest} = result;
             console.log(JSON.stringify(rest, null, 2));
         } else {
-            console.log(formatReport(result, {written: check ? undefined : (result.ok ? out : null), screenshot: args.png && result.png ? args.png : undefined}));
+            console.log(formatReport(result, {written: check ? undefined : (result.ok ? out : null), screenshot: args.png && result.png ? args.png : undefined, scriptScreenshot: scriptPng}));
         }
         return result.ok ? 0 : 1;
     } finally {

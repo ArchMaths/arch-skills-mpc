@@ -56,6 +56,14 @@ test('arch_build writes a loadable save file (relative to the server cwd)', asyn
     assert.match(textOf(dec), /^point\(P,c,0\.125\)/m);
 });
 
+test('arch_check returns a second screenshot after running @script', async () => {
+    const result = await client.callTool({name: 'arch_check', arguments: {
+        script: 'a=0\ny=a*x\n@script\nsetInterval(() => arch.valuesetting(\'a\', 1), 50);\n@end'}});
+    assert.match(textOf(result), /Preview: ran 2 s with no errors/);
+    assert.equal(result.content.filter(c => c.type === 'image').length, 2);
+    assert.match(textOf(result), /Screenshot 2: the same file after running its @script/);
+});
+
 test('arch_build refuses to write a broken script', async () => {
     const result = await client.callTool({name: 'arch_build', arguments: {script: 'sin(', output_path: 'out/broken.txt', screenshot: false}});
     assert.equal(result.isError, true);

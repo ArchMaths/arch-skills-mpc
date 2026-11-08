@@ -38,10 +38,21 @@ export function decompile(saveText) {
     if (state.name) lines.push(`@title ${state.name}`);
     lines.push(`# Decompiled from an Arch save file (version ${state.version ?? 'unknown'}).`, '');
 
+    const operator = (name, params, body) => {
+        const text = String(body ?? '').replace(/\r\n?/g, '\n');
+        if (text.split('\n').some(l => l.trim().toLowerCase() === '@end'))
+            warnings.push(`Operator "${name}" contains a line reading "@end", which would end the block early; edit it before rebuilding.`);
+        lines.push(`@operator ${name}(${(params || []).join(', ')})`, ...text.replace(/^\n+|\s+$/g, '').split('\n'), '@end');
+    };
+    // Operators loaded from a JS file live in a global list rather than as entries.
+    const entryNames = new Set(state.entries.filter(e => e && e.type === 'advanced_custom_function_definition').map(e => String(e.name).toLowerCase()));
+    for (const def of Array.isArray(state.customAdvancedFunctions) ? state.customAdvancedFunctions : [])
+        if (def && def.name && !entryNames.has(String(def.name).toLowerCase())) operator(def.name, def.params, def.bodyJsString);
+
     for (const entry of state.entries) {
         if (!entry || typeof entry !== 'object') continue;
         if (entry.type === 'advanced_custom_function_definition') {
-            warnings.push(`Skipped JavaScript operator "${entry.name}" (not supported in scripts).`);
+            operator(entry.name, entry.params, entry.bodyJs);
             continue;
         }
         if (entry.type === 'text') {
@@ -80,6 +91,7 @@ export function decompile(saveText) {
             continue;
         }
         if (entry.type === 'variable' && entry.isEditableIndependent) options.push(...sliderOptions(entry));
+        if (Number.isInteger(entry.displayFrame) && entry.displayFrame > 0) options.push(`frame=${entry.displayFrame}`);
         if (entry.statisticsRegressionId) warnings.push(`"${expr}" is a regression curve tied to a statistics table; it is kept as a plain curve.`);
         lines.push(options.length ? `${expr}  | ${options.join(' ')}` : expr);
     }
@@ -107,20 +119,44 @@ export function decompile(saveText) {
     add('showHiddenGeo', state.showHiddenGeo);
     if (settings.length) lines.push(`@set ${settings.join(' ')}`);
 
+    if (state.showPlaybackControls) {
+        const frames = [`total=${num(state.totalFrames ?? 100)}`, `fps=${num(state.playbackFPS ?? 10)}`];
+        if (state.currentFrame) frames.push(`current=${num(state.currentFrame)}`);
+        if (state.frameExpr && String(state.frameExpr).trim()) {
+            const bind = String(state.frameExpr).trim();
+            frames.push(/\s/.test(bind) ? `bind="${bind}"` : `bind=${bind}`);
+        }
+        lines.push(`@frames ${frames.join(' ')}`);
+    }
+
     const annotations = Array.isArray(state.annotations) ? state.annotations : [];
-    if (annotations.length) {
+    for (const a of annotations.filter(a => a && a.type === 'text')) {
+        const raw = String(a.content ?? '').replace(/\r?\n/g, '\\n');
+        const smart = raw.startsWith('<smart>');
+        const content = smart ? raw.slice(7) : raw;
+        const opts = [`x=${num(a.x)}`, `y=${num(a.y)}`, `width=${num(a.width)}`, `height=${num(a.height)}`, `size=${num(a.fontSize ?? 0.5)}`];
+        const c = a.color;
+        if (c && (c.h || c.s || c.b || c.a)) opts.push(...colorOptions(c));
+        if (smart) opts.push('smart');
+        else if (/\{value\(|\{if\(/.test(content)) opts.push('plain');
+        lines.push(`@text ${opts.join(' ')} | ${content}`);
+    }
+    const others = annotations.filter(a => a && a.type !== 'text');
+    if (others.length) {
         const counts = {};
-        annotations.forEach(a => { counts[a.type] = (counts[a.type] || 0) + 1; });
-        warnings.push(`Dropped ${annotations.length} drawing annotation(s) (${Object.entries(counts).map(([k, v]) => `${v} ${k}`).join(', ')}); scripts cannot express them.`);
+        others.forEach(a => { counts[a.type] = (counts[a.type] || 0) + 1; });
+        warnings.push(`Dropped ${others.length} annotation(s) (${Object.entries(counts).map(([k, v]) => `${v} ${k}`).join(', ')}); scripts cannot express drawings, images, PDFs or audio.`);
     }
     const stats = state.statistics || {};
     const hasData = (Array.isArray(stats.rows) && stats.rows.some(row => Array.isArray(row) && row.some(cell => String(cell ?? '').trim() !== '')))
         || (Array.isArray(stats.regressions) && stats.regressions.length > 0);
     if (hasData) warnings.push('Dropped the statistics table data and regressions.');
-    if (state.globalScript && String(state.globalScript).trim()) warnings.push('Dropped the global ArchScript program.');
-    if (state.frameExpr && String(state.frameExpr).trim()) warnings.push('Dropped frame-by-frame animation settings.');
-    if (Array.isArray(state.customAdvancedFunctions) && state.customAdvancedFunctions.length)
-        warnings.push('Dropped custom JavaScript operators.');
+    if (state.globalScript && String(state.globalScript).trim()) {
+        const program = String(state.globalScript).replace(/\r\n?/g, '\n').replace(/^\n+|\s+$/g, '');
+        if (program.split('\n').some(l => l.trim().toLowerCase() === '@end'))
+            warnings.push('The global script contains a line reading "@end", which would end the @script block early; edit it before rebuilding.');
+        lines.push('', '@script', ...program.split('\n'), '@end');
+    }
 
     return {script: lines.join('\n') + '\n', warnings};
 }

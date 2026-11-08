@@ -2,7 +2,7 @@
 // Arch page. They must be self-contained: no imports, no outer variables.
 
 // Runs parsed script steps against the live Arch engine and exports the save file.
-export async function runSteps({steps, title}) {
+export async function runSteps({steps, title, script}) {
     const e = window.archInstance;
     const api = new window.ArchAgentProtocol.AgentAPI(e);
     const lower = s => String(s).toLowerCase();
@@ -10,6 +10,7 @@ export async function runSteps({steps, title}) {
     const lineOf = new Map();         // entry -> script line
     const refs = new Map();           // lower(ref) -> actual reference (autoNumber or name)
     const playEntries = [];
+    const textLines = [];             // script line of each text box, in creation order
     let last = null;
 
     const err = (line, message) => errors.push({line, message});
@@ -113,7 +114,7 @@ export async function runSteps({steps, title}) {
         return [...new Set(ids.filter(n => !known(n)))];
     };
 
-    const applyOptions = async (entry, line, {style = {}, slider = {}, fixed = false}) => {
+    const applyOptions = async (entry, line, {style = {}, slider = {}, fixed = false, frame}) => {
         const {color, visible, thickness, dash, label} = style;
         if (color || visible !== undefined || thickness !== undefined) {
             if (color && !entry.color) throw new Error('this object has no color');
@@ -132,6 +133,10 @@ export async function runSteps({steps, title}) {
         if (fixed) {
             if (entry.type !== 'geometry' || entry.geometryType !== 'point') throw new Error('fixed only applies to point(...) objects');
             entry.dragEnabled = 0;
+        }
+        if (frame !== undefined) {
+            if (entry.type === 'text') throw new Error('frame= does not apply to // text entries (Arch shows them on every frame)');
+            entry.displayFrame = frame;
         }
         const hasSlider = ['min', 'max', 'step', 'mode', 'play'].some(k => slider[k] !== undefined);
         if (!hasSlider) return;
@@ -247,9 +252,114 @@ export async function runSteps({steps, title}) {
         for (const s of list) await api.execute({tool: 'settings.set', args: {name: s.name, value: s.value}});
     };
 
+    // Like the Agent API's checkedMutation, for input it refuses (JS operators contain braces).
+    const rawCreate = expr => guarded(async () => {
+        const backup = e.saveSnapshot(), undo = e.undoStack.slice(), redo = e.redoStack.slice();
+        const before = new Set(e.entries), problems = [];
+        const original = e.showTopPrompt;
+        e.showTopPrompt = function (message, isError, ...rest) {
+            if (isError) problems.push(String(message));
+            return original.call(this, message, isError, ...rest);
+        };
+        try { e.addEntry(expr); } catch (error) { problems.push(error.message); } finally { e.showTopPrompt = original; }
+        const created = e.entries.filter(en => !before.has(en));
+        problems.push(...created.map(en => en.compilationError).filter(Boolean));
+        if (!created.length && !problems.length) problems.push('nothing was created');
+        if (problems.length) {
+            e.applySnapshot(backup);
+            e.undoStack = undo; e.redoStack = redo;
+            if (e.updateHistoryButtons) e.updateHistoryButtons();
+            throw new Error(problems.join('; '));
+        }
+        return created;
+    });
+
+    const operatorStep = async step => {
+        const {line, name, params, body} = step;
+        try { new Function(...params, body); } catch (error) {
+            return err(line, `JavaScript syntax error in operator ${name}: ${error.message}`);
+        }
+        const key = lower(name);
+        if (builtinNames.has(key) || ['x', 'y', 'z', 't', 'e', 'pi'].includes(key))
+            return err(line, `"${name}" is a built-in name; choose another operator name`);
+        if (e.entries.some(en => [en.name, en.key].some(n => n && lower(n) === key)))
+            return err(line, `name "${name}" is already taken (names are case-insensitive)`);
+        let created;
+        try { created = await rawCreate(`${name}(${params.join(',')})={${body}}`); } catch (error) {
+            return err(line, `Arch rejected operator ${name}: ${translate(error.message)}`);
+        }
+        created.forEach(en => lineOf.set(en, line));
+        if (!created.some(en => en.type === 'advanced_custom_function_definition'))
+            return err(line, `Arch did not register ${name} as a JavaScript operator`);
+        // Arch swallows exceptions thrown by operators (the value just becomes NaN), so count them
+        // during the build; the engine reports them after drawing. The saved file keeps bodyJs only.
+        const record = e.calcJSUtils.advancedCustomFunctions[key];
+        if (record && typeof record.compiledFunc === 'function') {
+            const inner = record.compiledFunc;
+            const log = (window.__archOperatorErrors = window.__archOperatorErrors || {});
+            record.compiledFunc = (...args) => {
+                try {
+                    return inner(...args);
+                } catch (error) {
+                    const item = log[name] || (log[name] = {line, message: String((error && error.message) || error), count: 0});
+                    item.count++;
+                    throw error;
+                }
+            };
+        }
+    };
+
+    // Text boxes clip their content, so size them from the text unless width/height are given.
+    const textStep = async step => {
+        if (document.fonts && document.fonts.ready) await document.fonts.ready;
+        const content = (step.smart ? '<smart>' : '') + step.content;
+        let shown = step.content;
+        if (step.smart) {
+            const now = e._processSmartTextLogic(content);
+            if (/NaN/.test(now) && !/NaN/.test(step.content))
+                warn(step.line, `smart text currently reads "${now}"; check the expressions inside {value(...)} / {if(...)}`);
+            // Live values change length; size the box for a long number (Arch shows 6 significant digits).
+            shown = e._processSmartTextLogic(content.replace(/\{value\((.*?)\)\}/g, '-0.000123456')).replace(/\/[rbi]/g, '');
+        }
+        const lines = shown.split('\\n');   // Arch breaks lines at a literal backslash-n
+        const ctx = document.createElement('canvas').getContext('2d');
+        ctx.font = "100px 'HarmonyOS_SC', Arial";
+        const em = Math.max(...lines.map(l => ctx.measureText(l).width)) / 100;
+        const size = step.size;
+        const round = v => Math.round(v * 1000) / 1000;
+        const width = step.width ?? round(em * size * (step.smart ? 1.15 : 1.08) + size * 0.4);
+        const height = step.height ?? round(lines.length * size * 1.2 + size * 0.3);
+        e.annotations.push({type: 'text', content, x: step.x, y: step.y, width, height, fontSize: size,
+            color: {h: 0, s: 0, b: 0, a: 0, ...(step.color || {})}});
+        textLines.push(step.line);
+        e.annotationBatchesDirty = true;
+        e.annotationLayerDirty = true;
+        e.requestDraw();
+    };
+
+    const framesStep = async step => {
+        const f = step.frames;
+        api.extensions().settings.set('showPlaybackControls', true);
+        if (f.total !== undefined) e.totalFrames = f.total;
+        if (f.fps !== undefined) e.playbackFPS = f.fps;
+        if (f.current !== undefined) e.currentFrame = f.current;
+        if (f.bind !== undefined) {
+            let v;
+            try { v = e.evaluateExpressionWithCalcJS(f.bind, Object.fromEntries(e.variables || [])); } catch (error) {
+                throw new Error(`bind expression "${f.bind}" could not be evaluated: ${error.message}`);
+            }
+            if (!Number.isFinite(v)) throw new Error(`bind expression "${f.bind}" evaluates to ${v}; define the variables it uses on earlier lines`);
+            e.frameExpr = f.bind;
+        }
+        if (e.currentFrame > e.totalFrames) throw new Error(`current frame ${e.currentFrame} exceeds total ${e.totalFrames}`);
+    };
+
     for (const step of steps) {
         try {
             if (step.kind === 'create') await createStep(step);
+            else if (step.kind === 'operator') await operatorStep(step);
+            else if (step.kind === 'text') await textStep(step);
+            else if (step.kind === 'frames') await framesStep(step);
             else if (step.kind === 'view') await viewStep(step);
             else if (step.kind === 'set') await setStep(step);
             else if (step.kind === 'style') {
@@ -267,6 +377,18 @@ export async function runSteps({steps, title}) {
         if (e.fileNameDisplay) e.fileNameDisplay.textContent = title;
     }
 
+    // The global program is stored, not run: Arch only runs it when the user presses Run.
+    if (script) {
+        try {
+            new Function('arch', 'setInterval', 'clearInterval', 'setTimeout', 'clearTimeout', 'addEventListener', `'use strict';\n${script.text}`);
+        } catch (error) {
+            err(script.line, `@script has a JavaScript syntax error: ${error.message}`);
+        }
+        e.globalScript = script.text;
+        const input = document.getElementById('global-script-input');
+        if (input) input.value = script.text;
+    }
+
     // Final health check after every dependency exists.
     for (const entry of e.entries) {
         const line = lineOf.get(entry);
@@ -277,6 +399,11 @@ export async function runSteps({steps, title}) {
         if (entry.type === 'variable' && !Number.isFinite(entry.value))
             warn(line, `${label} evaluates to ${entry.value}`);
     }
+    const framed = e.entries.filter(en => en.displayFrame > 0);
+    if (framed.length && !e.showPlaybackControls)
+        warn(lineOf.get(framed[0]), 'frame= has no effect until frame playback is enabled with an @frames line; until then every object is shown');
+    for (const entry of framed.filter(en => e.showPlaybackControls && en.displayFrame > e.totalFrames))
+        warn(lineOf.get(entry), `frame=${entry.displayFrame} is beyond @frames total=${e.totalFrames}, so it is never shown`);
 
     // Saved play state starts animations when the file is opened, but must not
     // advance values during the build, so it is applied only around the export.
@@ -291,8 +418,19 @@ export async function runSteps({steps, title}) {
 
     const objects = e.entries.map(entry => ({line: lineOf.get(entry), ...api.describe(entry),
         ...(entry.pointOnObject ? {min: entry.min, max: entry.max, step: entry.step} : {}),
-        ...(entry.isEditableIndependent || entry.pointOnObject ? {playMode: entry.playMode, play: playEntries.includes(entry)} : {})}));
-    return {errors, warnings, objects, json, view: api.view(), refs: Object.fromEntries(refs)};
+        ...(entry.isEditableIndependent || entry.pointOnObject ? {playMode: entry.playMode, play: playEntries.includes(entry)} : {}),
+        ...(entry.displayFrame > 0 ? {frame: entry.displayFrame} : {})}));
+    const saved = JSON.parse(json);
+    const texts = (saved.annotations || []).filter(a => a.type === 'text').map((a, i) => {
+        const smart = a.content.startsWith('<smart>');
+        return {line: textLines[i], content: smart ? a.content.slice(7) : a.content, smart, x: a.x, y: a.y,
+            width: a.width, height: a.height, size: a.fontSize, ...(smart ? {shown: e._processSmartTextLogic(a.content)} : {})};
+    });
+    const frames = saved.showPlaybackControls
+        ? {total: saved.totalFrames, fps: saved.playbackFPS, current: saved.currentFrame, ...(saved.frameExpr ? {bind: saved.frameExpr} : {})}
+        : null;
+    return {errors, warnings, objects, json, view: api.view(), refs: Object.fromEntries(refs), texts, frames,
+        script: script ? {line: script.line, lines: script.text.split('\n').length} : null};
 }
 
 // Loads a save file into a fresh page and describes the result, to prove the file round-trips.
@@ -312,7 +450,27 @@ export function loadAndDescribe(json) {
     const originalAlert = window.alert;
     window.alert = message => alerts.push(String(message));
     try { e.loadState(json); } finally { e.showTopPrompt = original; window.alert = originalAlert; }
-    return {errors: [...prompts, ...alerts], objects: e.entries.map(entry => api.describe(entry))};
+    const again = JSON.stringify(e.exportStateObject(), (key, value) => key === 'compiledFunc' ? undefined : value);
+    return {errors: [...prompts, ...alerts], objects: e.entries.map(entry => api.describe(entry)), json: again};
+}
+
+// Runs the saved global program (as the Run button does) in the throwaway verification page.
+// Errors raised synchronously surface as error prompts; errors in timers surface as page errors.
+export async function previewScript(ms) {
+    const e = window.archInstance;
+    const problems = [];
+    const original = e.showTopPrompt;
+    e.showTopPrompt = function (message, isError, ...rest) {
+        if (isError) problems.push(String(message));
+        return original.call(this, message, isError, ...rest);
+    };
+    try {
+        e.executeGlobalScript();
+        await new Promise(resolve => setTimeout(resolve, ms));
+    } finally {
+        e.showTopPrompt = original;
+    }
+    return {problems, objects: e.entries.length};
 }
 
 // Resolves once the page has painted a couple of frames.
