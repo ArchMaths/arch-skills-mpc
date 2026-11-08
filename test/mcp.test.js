@@ -34,10 +34,27 @@ test('arch_guide returns the guide', async () => {
     assert.match(textOf(result), /What u means in `point\(P,host,u\)`/);
 });
 
+test('arch_guide can return only some sections', async () => {
+    const result = await client.callTool({name: 'arch_guide', arguments: {section: 'geometry'}});
+    assert.match(textOf(result), /What u means/);
+    assert.ok(!textOf(result).includes('## Global program'));
+    const bad = await client.callTool({name: 'arch_guide', arguments: {section: 'nope'}});
+    assert.equal(bad.isError, true);
+    assert.match(textOf(bad), /Unknown guide topic/);
+});
+
 test('arch_check reports errors with an image', async () => {
     const result = await client.callTool({name: 'arch_check', arguments: {script: 'y=x^2 | ref=p\nintersect(I,p,q,1,1)'}});
     assert.match(textOf(result), /line 2: refers to "q"/);
     assert.ok(result.content.some(c => c.type === 'image' && c.mimeType === 'image/png'));
+});
+
+test('arch_check renders smaller screenshots and arch_build can report briefly', async () => {
+    const check = await client.callTool({name: 'arch_check', arguments: {script: 'y=x^2', screenshot_scale: 0.5}});
+    const png = Buffer.from(check.content.find(c => c.type === 'image').data, 'base64');
+    assert.deepEqual([png.readUInt32BE(16), png.readUInt32BE(20)], [640, 400]);
+    const build = await client.callTool({name: 'arch_build', arguments: {script: 'y=x^2', output_path: 'out/brief.txt', brief: true, screenshot: false}});
+    assert.match(textOf(build), /^OK: wrote .*brief\.txt \(1 objects\)$/);
 });
 
 test('arch_build writes a loadable save file (relative to the server cwd)', async () => {

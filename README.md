@@ -25,9 +25,28 @@ The commands below write `/path/to/arch-mcp` for wherever you cloned it (run `pw
 
 If Chrome isn't installed: `npx playwright-core install chromium`, or set `ARCH_BROWSER_PATH` to a Chromium executable.
 
-### Claude Code
+### Claude Code: the `arch-graph` skill (recommended)
 
-The repo's `.mcp.json` offers the `arch` server to Claude Code sessions started anywhere inside the repo. It runs `npx --no-install arch-mcp`, which works from subfolders too and never downloads anything. To use it from any project, run this once inside the `arch-mcp` folder:
+Run this once inside the `arch-mcp` folder:
+
+```sh
+npm run install-skill
+```
+
+It installs the skill at `~/.claude/skills/arch-graph/SKILL.md` (or `$CLAUDE_CONFIG_DIR/skills`), with this folder's absolute path filled in, so it works in every project. New sessions use it whenever you ask for an Arch graph; you can also type `/arch-graph`. Run it again after moving or updating this folder. `npm run install-skill -- --dir <project>/.claude/skills` installs it for one project instead.
+
+The skill drives the CLI (below) instead of the MCP server, and uses far fewer tokens:
+
+- It loads a ~2k-token summary instead of the ~5k-token guide, and reads the rest one topic at a time (`--guide geometry`).
+- The script lives in a `.arch` file that Claude fixes with small edits, instead of resending the whole script on every check.
+- Checks return text only. Claude looks at a screenshot when appearance matters, usually once, at half size (`--png-scale 0.5`, a quarter of the image tokens).
+- The final build prints one line (`--brief`).
+
+In a test session (build a triangle with its circumcircle and a moving point, fixing one mistake along the way), that came to about 3.5k tokens, against about 10.5k for the same steps through the MCP tools. Each CLI run starts Chrome, so a check takes about 3 s instead of about 1 s from the always-running MCP server.
+
+### Claude Code: MCP server
+
+To use the MCP tools instead (or as well), run this once inside the `arch-mcp` folder:
 
 ```sh
 claude mcp add arch --scope user -- node "$PWD/src/mcp.js"
@@ -56,7 +75,7 @@ Put this in the project's `AGENTS.md` / `CLAUDE.md`:
 
 ```
 To make Arch graphing-calculator files: run `node /path/to/arch-mcp/src/cli.js --guide`
-once to learn the scene-script format, write a .arch script, check it with
+once to learn the scene-script format (or `--guide <topic>` for one part), write a .arch script, check it with
 `node /path/to/arch-mcp/src/cli.js --check scene.arch --png shot.png` (look at the PNG),
 then build with `node /path/to/arch-mcp/src/cli.js scene.arch -o scene.txt`.
 Never write Arch save JSON by hand.
@@ -66,9 +85,9 @@ Never write Arch save JSON by hand.
 
 | Tool | What it does |
 |---|---|
-| `arch_guide` | Script format, Arch syntax, the meaning of point-on-object parameters, and common pitfalls (`docs/GUIDE.md`). `full_reference: true` adds the full Chinese syntax manual. |
-| `arch_check` | Runs a script (`script` text or `script_path`) and returns the report and screenshot, plus a second screenshot after test-running any `@script` (`script_preview: false` skips that). Writes nothing. |
-| `arch_build` | Same, and writes the save file to `output_path` (only if there are no errors and the reload check passes). Optional `screenshot_path`. |
+| `arch_guide` | Script format, Arch syntax, the meaning of point-on-object parameters, and common pitfalls (`docs/GUIDE.md`). `section: "geometry"` (or a comma-separated list) returns only those topics; `full_reference: true` adds the full Chinese syntax manual. |
+| `arch_check` | Runs a script (`script` text or `script_path`) and returns the report and screenshot, plus a second screenshot after test-running any `@script` (`script_preview: false` skips that). `screenshot_scale: 0.5` renders 640x400 screenshots. Writes nothing. |
+| `arch_build` | Same, and writes the save file to `output_path` (only if there are no errors and the reload check passes). Optional `screenshot_path`; `brief: true` leaves out the object list. |
 | `arch_decompile` | Turns an existing save file into a script, so agents can edit files people made by hand. |
 
 ## Scene scripts
@@ -107,9 +126,14 @@ CLI:
 ```sh
 node src/cli.js examples/circle-motion.arch                 # writes examples/circle-motion.txt
 node src/cli.js --check scene.arch --png shot.png           # validate + screenshot, no file
+node src/cli.js --check scene.arch --png s.png --png-scale 0.5  # 640x400 screenshot
+node src/cli.js scene.arch -o out.txt --brief               # report only status, errors, warnings
 node src/cli.js --decompile "My graph.txt" -o mygraph.arch  # save file -> script
 node src/cli.js --guide                                     # print the guide
+node src/cli.js --guide geometry,animation                  # print only these topics
 ```
+
+Guide topics: `workflow format syntax geometry animation text operators script mistakes` (a unique prefix such as `geo` also works).
 
 Exit code 0 means OK, 1 means the script has errors, 2 means a usage or environment problem. `--json` prints the full result.
 
@@ -138,6 +162,6 @@ The tool depends on `window.archInstance`, `window.ArchAgentProtocol` and the sa
 
 ## License
 
-The arch-mcp code and documentation in this repository (`src/`, `test/`, `docs/`, `examples/`, this README) are released under the [MIT License](LICENSE).
+The arch-mcp code and documentation in this repository (`src/`, `test/`, `docs/`, `examples/`, `skill/`, this README) are released under the [MIT License](LICENSE).
 
 `index.html` (the Arch graphing calculator) and `Arch图形计算器语法与对象创建说明.txt` (its syntax manual) are © Arch's authors. They are included so the tool works out of the box and are **not** covered by the MIT License.

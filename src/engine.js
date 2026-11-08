@@ -65,6 +65,19 @@ async function launchBrowser() {
 
 class RunTimeout extends Error {}
 
+// scale < 1 asks Chrome to render the page smaller (sharp text, not a blurry downscale) without
+// resizing the page: a 0.5 screenshot has a quarter of the pixels, so it costs an AI a quarter of the image tokens.
+async function capture(page, scale = 1) {
+    if (scale === 1) return page.screenshot({type: 'png'});
+    const cdp = await page.context().newCDPSession(page);
+    try {
+        const {data} = await cdp.send('Page.captureScreenshot', {format: 'png', clip: {x: 0, y: 0, ...VIEWPORT, scale}});
+        return Buffer.from(data, 'base64');
+    } finally {
+        await cdp.detach().catch(() => {});
+    }
+}
+
 // Page code can loop forever (a bad operator or script); give up and let the caller close the page.
 function guard(promise, ms, what) {
     promise.catch(() => {});
@@ -155,7 +168,7 @@ export class ArchEngine {
     // Runs a scene script. Returns {ok, errors, warnings, objects, view, json, png, scriptPng, ...}.
     // ok is false when any line failed, the saved file does not reload identically, or the
     // @script preview raised an error.
-    async run(source, {screenshot = true, verify = true, scriptPreview = true, timeoutMs = RUN_TIMEOUT} = {}) {
+    async run(source, {screenshot = true, screenshotScale = 1, verify = true, scriptPreview = true, timeoutMs = RUN_TIMEOUT} = {}) {
         let parsed;
         try {
             parsed = parseScript(source);
@@ -178,7 +191,7 @@ export class ArchEngine {
         // check that no operator hangs the page.
         const shoot = async (page, what) => {
             await guard(page.evaluate(settle, 500), timeoutMs, what);
-            return page.screenshot({type: 'png'});
+            return capture(page, screenshotScale);
         };
         try {
             result = await guard(slot.page.evaluate(runSteps, {steps: parsed.steps, title: parsed.title, script: parsed.script}),
@@ -211,7 +224,7 @@ export class ArchEngine {
                     // Run the global program the way the Run button does, in this throwaway page.
                     const before = check.pageErrors.length;
                     const preview = await guard(check.page.evaluate(previewScript, PREVIEW_MS), timeoutMs, 'The @script preview');
-                    if (screenshot) scriptPng = await guard(check.page.screenshot({type: 'png'}), timeoutMs, 'The @script preview');
+                    if (screenshot) scriptPng = await guard(capture(check.page, screenshotScale), timeoutMs, 'The @script preview');
                     // Count page errors only when the stack passes through the script, which Arch compiles
                     // with new Function (shown as <anonymous>/eval). Arch's own blocked network calls are ignored.
                     const fromScript = check.pageErrors.slice(before).filter(e => USER_CODE_FRAME.test(e.stack));

@@ -19,7 +19,8 @@ function describeObject(o) {
     return `  ${where.padEnd(5)} ${label ? label + ' ' : ''}[${kind}] ${o.expression}${value ? '  =>  ' + value : ''}${extras.length ? '  (' + extras.join(', ') + ')' : ''}`;
 }
 
-export function formatReport(result, {written, screenshot, scriptScreenshot} = {}) {
+// brief: only the status, errors, warnings and @script preview, for a build after a check already listed the objects.
+export function formatReport(result, {written, screenshot, scriptScreenshot, brief = false} = {}) {
     const out = [];
     const objects = result.objects || [];
     if (result.ok) {
@@ -38,16 +39,16 @@ export function formatReport(result, {written, screenshot, scriptScreenshot} = {
         out.push('', 'Warnings:');
         for (const w of result.warnings) out.push(`  ${where(w)}: ${w.message}`);
     }
-    if (objects.length) {
+    if (objects.length && !brief) {
         out.push('', 'Objects (line, reference, type, definition => current value):');
         for (const o of objects) out.push(describeObject(o));
     }
-    if (result.texts?.length) {
+    if (result.texts?.length && !brief) {
         out.push('', 'Text boxes (line, top-left corner, width x height, font size, content => as shown now):');
         for (const t of result.texts)
             out.push(`  ${(t.line ? `L${t.line}` : '').padEnd(5)} (${fmt(t.x)}, ${fmt(t.y)}) ${fmt(t.width)}x${fmt(t.height)} size ${fmt(t.size)}${t.smart ? ' smart' : ''}: "${t.content}"${t.shown !== undefined ? `  =>  "${t.shown}"` : ''}`);
     }
-    if (result.frames) {
+    if (result.frames && !brief) {
         const f = result.frames;
         out.push('', `Frames: playback controls on, ${f.total} frames at ${fmt(f.fps)} fps, opens on frame ${f.current}${f.bind ? `, frame bound to ${f.bind}` : ''} (frame 0 shows every object)`);
     }
@@ -57,6 +58,7 @@ export function formatReport(result, {written, screenshot, scriptScreenshot} = {
             : preview.problems.length ? `ran ${preview.seconds} s and failed (see errors)` : `ran ${preview.seconds} s with no errors`;
         out.push('', `Global script: ${result.script.lines} line(s) from line ${result.script.line}; stored in the file, runs when the user presses Run. Preview: ${status}.`);
     }
+    if (brief) return out.join('\n');
     if (result.refs && Object.keys(result.refs).length)
         out.push('', 'Refs: ' + Object.entries(result.refs).map(([k, v]) => `${k} -> ${v}`).join(', '));
     if (result.view) {

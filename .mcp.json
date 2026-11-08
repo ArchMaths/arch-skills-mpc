@@ -1,8 +1,0 @@
-{
-  "mcpServers": {
-    "arch": {
-      "command": "npx",
-      "args": ["--no-install", "arch-mcp"]
-    }
-  }
-}

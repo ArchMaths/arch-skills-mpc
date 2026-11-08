@@ -9,7 +9,8 @@
   },
   "scripts": {
     "test": "node --test --test-concurrency=1 test/",
-    "mcp": "node src/mcp.js"
+    "mcp": "node src/mcp.js",
+    "install-skill": "node src/install-skill.js"
   },
   "engines": {
     "node": ">=18"

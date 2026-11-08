@@ -148,3 +148,13 @@ test('errors inside Arch itself are reported once, as an Arch bug with a workaro
     const fixed = await engine.run('point(A,0,0)\npoint(B,1,0)\ny=x\nlength(d,A,B)', {screenshot: false});
     assert.deepEqual(fixed.warnings, []);
 });
+
+const pngSize = png => [png.readUInt32BE(16), png.readUInt32BE(20)];
+
+test('screenshots can be rendered at a smaller scale, including after @script', async () => {
+    const result = await engine.run('a=0\ny=a*x\n@script\nsetInterval(() => arch.valuesetting(\'a\', 1), 50);\n@end', {screenshotScale: 0.5});
+    assert.ok(result.ok);
+    assert.deepEqual(pngSize(result.png), [640, 400]);
+    assert.deepEqual(pngSize(result.scriptPng), [640, 400]);
+    assert.deepEqual(pngSize((await engine.run('y=x', {screenshot: true})).png), [1280, 800]);
+});

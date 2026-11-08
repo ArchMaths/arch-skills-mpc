@@ -9,13 +9,13 @@ import {z} from 'zod';
 import {ArchEngine} from './engine.js';
 import {formatReport} from './report.js';
 import {decompile} from './decompile.js';
-import {readGuide, readFullSyntax} from './guide.js';
+import {readGuide, readGuideTopics, readFullSyntax, GUIDE_TOPICS} from './guide.js';
 
 const engine = new ArchEngine({keepWarm: true});
 const abs = path => resolve(process.cwd(), path);
 
 const INSTRUCTIONS = `Arch is a GeoGebra-like graphing calculator. These tools turn a short scene script into a real Arch save file (.txt) by running the actual Arch engine headlessly.
-Workflow: call arch_guide once to learn the script format and Arch syntax; write a script; call arch_check and read the errors, warnings, object values and screenshot; fix and re-check; then arch_build to write the file. To modify an existing save file, call arch_decompile first, edit the script, then build.
+Workflow: call arch_guide once to learn the script format and Arch syntax (or pass section to read only one part); write a script; call arch_check and read the errors, warnings, object values and screenshot; fix and re-check; then arch_build to write the file. To modify an existing save file, call arch_decompile first, edit the script, then build.
 Never hand-write Arch save-file JSON: it contains parser-computed fields and will not load correctly.
 Scripts can also define JavaScript operators (@operator), canvas text (@text), frame-by-frame steps (@frames, frame=) and a global program (@script, test-run for 2 s in an isolated page); see arch_guide.`;
 
@@ -41,16 +41,27 @@ function scriptFrom({script, script_path}) {
 const scriptInput = {
     script: z.string().optional().describe('Scene script text (one Arch expression per line; see arch_guide).'),
     script_path: z.string().optional().describe('Path to a .arch scene script file, instead of script.'),
-    script_preview: z.boolean().optional().describe('Test-run the @script program for 2 s in an isolated page and report runtime errors plus a second screenshot (default true).')
+    script_preview: z.boolean().optional().describe('Test-run the @script program for 2 s in an isolated page and report runtime errors plus a second screenshot (default true).'),
+    screenshot_scale: z.number().min(0.1).max(1).optional().describe('Render screenshots at this scale (default 1 = 1280x800; 0.5 = 640x400, a quarter of the image tokens).')
 };
+const runOptions = (args, screenshot) => ({screenshot, screenshotScale: args.screenshot_scale ?? 1, verify: true, scriptPreview: args.script_preview !== false});
 
 server.registerTool('arch_guide', {
     title: 'Arch scene-script guide',
-    description: 'Returns the scene-script format and the Arch expression/geometry syntax with common pitfalls. Read this before writing a script. Set full_reference to also get the complete original syntax manual (Chinese, ~40 KB).',
-    inputSchema: {full_reference: z.boolean().optional().describe('Also include the complete Chinese syntax manual.')},
+    description: 'Returns the scene-script format and the Arch expression/geometry syntax with common pitfalls (about 5k tokens). Read this before writing a script. Pass section to get only some parts. Set full_reference to also get the complete original syntax manual (Chinese, ~40 KB).',
+    inputSchema: {
+        section: z.string().optional().describe(`Only these guide sections, comma-separated: ${Object.entries(GUIDE_TOPICS).map(([name, t]) => `${name} (${t.about})`).join('; ')}.`),
+        full_reference: z.boolean().optional().describe('Also include the complete Chinese syntax manual.')
+    },
     annotations: {readOnlyHint: true}
-}, async ({full_reference}) => {
-    const parts = [text(readGuide())];
+}, async ({section, full_reference}) => {
+    let guide;
+    try {
+        guide = section ? readGuideTopics(section) : readGuide();
+    } catch (error) {
+        return {content: [text(error.message)], isError: true};
+    }
+    const parts = [text(guide)];
     if (full_reference) parts.push(text('# Full Arch syntax manual (Chinese)\n\n' + readFullSyntax()));
     return {content: parts};
 });
@@ -61,7 +72,7 @@ server.registerTool('arch_check', {
     inputSchema: {...scriptInput, screenshot: z.boolean().optional().describe('Include a screenshot (default true).')},
     annotations: {readOnlyHint: true}
 }, async args => {
-    const result = await engine.run(scriptFrom(args), {screenshot: args.screenshot !== false, verify: true, scriptPreview: args.script_preview !== false});
+    const result = await engine.run(scriptFrom(args), runOptions(args, args.screenshot !== false));
     return {content: [text(formatReport(result)), ...images(result)]};
 });
 
@@ -72,11 +83,12 @@ server.registerTool('arch_build', {
         ...scriptInput,
         output_path: z.string().describe('Where to write the save file, e.g. graphs/parabola.txt (Arch saves use .txt). Relative paths resolve against the server working directory; absolute paths are safest.'),
         screenshot_path: z.string().optional().describe('Also save a PNG screenshot here.'),
-        screenshot: z.boolean().optional().describe('Include the screenshot in the response (default true).')
+        screenshot: z.boolean().optional().describe('Include the screenshot in the response (default true).'),
+        brief: z.boolean().optional().describe('Report only the status, errors and warnings, without the object list (useful after arch_check already showed it).')
     }
 }, async args => {
     const wantPng = args.screenshot !== false || Boolean(args.screenshot_path);
-    const result = await engine.run(scriptFrom(args), {screenshot: wantPng, verify: true, scriptPreview: args.script_preview !== false});
+    const result = await engine.run(scriptFrom(args), runOptions(args, wantPng));
     const out = abs(args.output_path);
     let shot;
     if (result.ok) {
@@ -88,7 +100,7 @@ server.registerTool('arch_build', {
             writeFileSync(shot, result.png);
         }
     }
-    const content = [text(formatReport(result, {written: result.ok ? out : null, screenshot: shot}))];
+    const content = [text(formatReport(result, {written: result.ok ? out : null, screenshot: shot, brief: args.brief}))];
     if (args.screenshot !== false) content.push(...images(result));
     return {content, isError: !result.ok};
 });
