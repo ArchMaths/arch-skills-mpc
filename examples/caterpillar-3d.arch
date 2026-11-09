@@ -1,0 +1,218 @@
+# A cute caterpillar on a nibbled leaf, with a ladybug friend and dew drops, in 3D.
+# Press play on slider a to watch it crawl: a wave runs from tail to head while the head
+# bobs, the antennae wobble and the eyes blink. Slider hyw turns the head.
+@title Caterpillar
+
+# One loop of the animation; the crawl wave runs twice per loop.
+a=0 | min=0 max=1 step=0.002 mode=forward
+# Head turn in radians: 0 looks straight ahead along the leaf, -1 looks at the viewer.
+hyw=-1 | min=-1.6 max=0.6 step=0.01
+
+# ---------- Bead toolkit: many round shapes in one parametric surface ----------
+# Arch meshes each surface on a fixed grid, so a few surfaces holding many beads are far
+# quicker to draw (and to animate) than one surface per bead. The (u,v) square is cut into
+# tiles; kt gives each tile its own coordinates p,q from -1 to 1. Circles around the tile
+# centre become latitudes of a bead: the polar angle grows from 0 at the centre to hm (pi
+# for a ball, pi/2 for a dome) at radius 0.75. Outside that radius kw is 0 and the point
+# drops to an anchor hidden inside the model, so the grid cells between beads collapse
+# out of sight and every bead stays separate.
+kt(s)=2*(s-floor(s))-1
+kc(p,q)=sqrt(p*p+q*q)+0.000000001
+kw(p,q)=(1-sign(kc(p,q)-0.75))/2
+kn(p,q,hm)=cos(hm*kc(p,q)/0.75)
+ka(p,q,hm)=sin(hm*kc(p,q)/0.75)*p/kc(p,q)
+kb(p,q,hm)=sin(hm*kc(p,q)/0.75)*q/kc(p,q)
+# cl clamps to 0..1; tr is a tube radius profile that closes with round ends at t=0 and 1.
+cl(t)=(abs(t)-abs(t-1)+1)/2
+tr(t)=sqrt(cl(t/0.08)*cl((1-t)/0.08))
+mxx(p,q)=(p+q+abs(p-q))/2
+# Blinks: the eyes close twice in a row near a=0.4.
+bk=1-0.92*cl(1-((a-0.4)/0.025)^2)^2-0.92*cl(1-((a-0.46)/0.025)^2)^2
+# The scene is modelled along its own axes, then turned 45 degrees to lie along the
+# diagonal of Arch's 3D box, where it has the most room.
+rx(p,q)=sqrt(0.5)*(p-q)
+ry(p,q)=sqrt(0.5)*(p+q)
+
+# ---------- The leaf ----------
+# Height of the blade at (p,q): it arches along its length and cups up at the edges.
+lz(p,q)=-1.15-0.03*p*p+0.06*q*q
+# Half-width along the midrib (s from 0 at the stalk to 1 at the tip), and three round bites.
+lw(s)=2*abs(sin(pi*s))^0.85*(1-0.2*s)
+bc(s,c,r,d)=d*sqrt(cl(1-((s-c)/r)^2))
+lb(s)=mxx(mxx(bc(s,0.555,0.045,0.42),bc(s,0.618,0.05,0.56)),bc(s,0.68,0.04,0.38))
+lfx(s,w)=-3.7+7.4*s
+lfy(s,w)=w*(lw(s)-lb(s)*(1-sign(w))/2)
+lfz(s,w)=lz(lfx(s,w),lfy(s,w))+0.05*w^2*sin(10*s)
+# The blade is drawn over g from 0 to 1, with g bunched up around the bites (lgw maps g to s)
+# so that their round edges get more of Arch's mesh.
+lgw(g)=g-0.6*(sin(2*pi*(g-0.615))+sin(2*pi*0.615))/(2*pi)
+surface(rx(lfx(lgw(g),w),lfy(lgw(g),w)),ry(lfx(lgw(g),w),lfy(lgw(g),w)),lfz(lgw(g),w),g,0,1,w,-1,1) | ref=leaf color=#388e3c
+# Veins: one curve per side runs out along each vein and back, then on to the next one.
+vt(q)=1-abs(2*(q-floor(q))-1)
+vs(q)=0.1+0.125*floor(q)+0.13*vt(q)^1.3
+vw(q)=0.82*vt(q)
+curve(rx(lfx(q,0),0),ry(lfx(q,0),0),lfz(q,0)+0.015,q,0,0.97) | ref=midrib color=#9ccc65 thickness=5
+curve(rx(lfx(vs(q),-vw(q)),lfy(vs(q),-vw(q))),ry(lfx(vs(q),-vw(q)),lfy(vs(q),-vw(q))),lfz(vs(q),-vw(q))+0.015,q,0,6.999) | ref=veinsa color=#7cb342 thickness=3
+curve(rx(lfx(vs(q),vw(q)),lfy(vs(q),vw(q))),ry(lfx(vs(q),vw(q)),lfy(vs(q),vw(q))),lfz(vs(q),vw(q))+0.015,q,0,6.999) | ref=veinsb color=#7cb342 thickness=3
+curve(rx(-3.7-0.55*q,0.08*sin(2*q)),ry(-3.7-0.55*q,0.08*sin(2*q)),lz(-3.7,0)+0.01-0.12*q^2,q,0,1) | ref=stalk color=#1b5e20 thickness=8
+
+# ---------- The body: segments 0 (tail) to 7; the head sits where segment 8 would ----------
+sr(k)=0.53-0.17*exp(-0.75*k)
+mpx(k)=-2.75+0.62*k+0.05*sin(4*pi*a-0.9*k)
+mpy(k)=0.3*sin(0.75*k-1.3)
+sx(k)=rx(mpx(k),mpy(k))
+sy(k)=ry(mpx(k),mpy(k))
+# Rest on the leaf, rear up at the front, and lift in a wave that runs to the head.
+sz(k)=lz(mpx(k),mpy(k))+0.88*sr(k)+0.7*exp(-(8-k)*(8-k)/2.2)+0.12*exp(4*sin(4*pi*a-0.9*k)-4)
+# Heading of the body at segment k: (tgx,tgy) points forward and (-tgy,tgx) to the left.
+hd(k)=pi/4+atan(0.363*cos(0.75*k-1.3))
+tgx(k)=cos(hd(k))
+tgy(k)=sin(hd(k))
+# Segment k as a slightly squat ball, anchored at its centre.
+bdx(k,p,q)=sx(k)+kw(p,q)*sr(k)*ka(p,q,pi)
+bdy(k,p,q)=sy(k)+kw(p,q)*sr(k)*kb(p,q,pi)
+bdz(k,p,q)=sz(k)+kw(p,q)*0.9*sr(k)*kn(p,q,pi)
+# Even and odd segments, four in each surface (2 by 2 tiles), in two shades of green.
+surface(bdx(4*floor(u)+2*floor(v),kt(u),kt(v)),bdy(4*floor(u)+2*floor(v),kt(u),kt(v)),bdz(4*floor(u)+2*floor(v),kt(u),kt(v)),u,0,1.9999,v,0,1.9999) | ref=evens color=#7cb342
+surface(bdx(4*floor(u)+2*floor(v)+1,kt(u),kt(v)),bdy(4*floor(u)+2*floor(v)+1,kt(u),kt(v)),bdz(4*floor(u)+2*floor(v)+1,kt(u),kt(v)),u,0,1.9999,v,0,1.9999) | ref=odds color=#9ccc65
+# A dome on side sd (-1 right, 1 left) of segment k, at angle 0.85 from the top (spots) or
+# 2.45 (feet); 16 tiles hold 8 segments times 2 sides. Every one anchors at its segment's centre.
+ssz(k)=0.11+0.025*sin(2.3*k)
+spside(k,sd,p,q)=sd*0.751*(sr(k)-0.02+0.05*kn(p,q,pi/2))+0.66*ssz(k)*kb(p,q,pi/2)
+spx(k,sd,p,q)=sx(k)+kw(p,q)*(ssz(k)*ka(p,q,pi/2)*tgx(k)-spside(k,sd,p,q)*tgy(k))
+spy(k,sd,p,q)=sy(k)+kw(p,q)*(ssz(k)*ka(p,q,pi/2)*tgy(k)+spside(k,sd,p,q)*tgx(k))
+spz(k,sd,p,q)=sz(k)+kw(p,q)*(0.66*(0.9*sr(k)-0.02+0.05*kn(p,q,pi/2))-sd*0.751*ssz(k)*kb(p,q,pi/2))
+surface(spx(2*floor(u)+floor(v/2),2*floor(v)-4*floor(v/2)-1,kt(u),kt(v)),spy(2*floor(u)+floor(v/2),2*floor(v)-4*floor(v/2)-1,kt(u),kt(v)),spz(2*floor(u)+floor(v/2),2*floor(v)-4*floor(v/2)-1,kt(u),kt(v)),u,0,3.9999,v,0,3.9999) | ref=spots color=#ffca28
+ftside(k,sd,p,q)=sd*0.638*(sr(k)-0.05+0.14*kn(p,q,pi/2))-0.77*0.11*kb(p,q,pi/2)
+ftx(k,sd,p,q)=sx(k)+0.04*tgx(k)+kw(p,q)*(0.11*ka(p,q,pi/2)*tgx(k)-ftside(k,sd,p,q)*tgy(k))
+fty(k,sd,p,q)=sy(k)+0.04*tgy(k)+kw(p,q)*(0.11*ka(p,q,pi/2)*tgy(k)+ftside(k,sd,p,q)*tgx(k))
+ftz(k,sd,p,q)=sz(k)+kw(p,q)*(-0.77*(0.9*sr(k)-0.05+0.14*kn(p,q,pi/2))-sd*0.638*0.11*kb(p,q,pi/2))
+surface(ftx(2*floor(u)+floor(v/2),2*floor(v)-4*floor(v/2)-1,kt(u),kt(v)),fty(2*floor(u)+floor(v/2),2*floor(v)-4*floor(v/2)-1,kt(u),kt(v)),ftz(2*floor(u)+floor(v/2),2*floor(v)-4*floor(v/2)-1,kt(u),kt(v)),u,0,3.9999,v,0,3.9999) | ref=feet color=#ffa94d
+
+# ---------- The head ----------
+# Centre, and a frame (forward f, left s, up u) turned by yaw hyt, pitch hpt and roll hrl.
+hcx=rx(mpx(8)+0.05,mpy(8)-0.05)
+hcy=ry(mpx(8)+0.05,mpy(8)-0.05)
+hcz=sz(8)+0.12
+hyt=hyw+pi/4
+hpt=0.22+0.05*sin(4*pi*a)
+hrl=0.18+0.05*sin(2*pi*a)
+hfx=cos(hpt)*cos(hyt)
+hfy=cos(hpt)*sin(hyt)
+hfz=sin(hpt)
+hsx=-sin(hrl)*sin(hpt)*cos(hyt)-cos(hrl)*sin(hyt)
+hsy=-sin(hrl)*sin(hpt)*sin(hyt)+cos(hrl)*cos(hyt)
+hsz=sin(hrl)*cos(hpt)
+hux=-cos(hrl)*sin(hpt)*cos(hyt)+sin(hrl)*sin(hyt)
+huy=-cos(hrl)*sin(hpt)*sin(hyt)-sin(hrl)*cos(hyt)
+huz=cos(hrl)*cos(hpt)
+# Head-frame point (l1,l2,l3) to world coordinates.
+hwx(l1,l2,l3)=hcx+l1*hfx+l2*hsx+l3*hux
+hwy(l1,l2,l3)=hcy+l1*hfy+l2*hsy+l3*huy
+hwz(l1,l2,l3)=hcz+l1*hfz+l2*hsz+l3*huz
+# The head is a ball, a little wider than it is long or tall.
+surface(hwx(0.66*sin(p)*cos(m),0.74*sin(p)*sin(m),0.68*cos(p)),hwy(0.66*sin(p)*cos(m),0.74*sin(p)*sin(m),0.68*cos(p)),hwz(0.66*sin(p)*cos(m),0.74*sin(p)*sin(m),0.68*cos(p)),p,0,pi,m,0,2*pi) | ref=head color=#a5d65a
+# A dome on the head at longitude al and latitude be: its base sits dd above the skin, it is
+# rn high and ra wide by rb tall. Its anchor is the head centre.
+hlx(al,be,dd,rn,ra,rb,p,q)=kw(p,q)*((0.66+dd+rn*kn(p,q,pi/2))*cos(be)*cos(al)-ra*ka(p,q,pi/2)*sin(al)-rb*kb(p,q,pi/2)*sin(be)*cos(al))
+hly(al,be,dd,rn,ra,rb,p,q)=kw(p,q)*((0.74+dd+rn*kn(p,q,pi/2))*cos(be)*sin(al)+ra*ka(p,q,pi/2)*cos(al)-rb*kb(p,q,pi/2)*sin(be)*sin(al))
+hlz(al,be,dd,rn,ra,rb,p,q)=kw(p,q)*((0.68+dd+rn*kn(p,q,pi/2))*sin(be)+rb*kb(p,q,pi/2)*cos(be))
+# Eyes (one tile each); bk squashes them shut for a blink.
+eya(u,v)=hlx(0.36*(2*floor(u)-1),0.12,-0.08,0.2,0.19,0.25*bk,kt(u),2*v-1)
+eyb(u,v)=hly(0.36*(2*floor(u)-1),0.12,-0.08,0.2,0.19,0.25*bk,kt(u),2*v-1)
+eyc(u,v)=hlz(0.36*(2*floor(u)-1),0.12,-0.08,0.2,0.19,0.25*bk,kt(u),2*v-1)
+surface(hwx(eya(u,v),eyb(u,v),eyc(u,v)),hwy(eya(u,v),eyb(u,v),eyc(u,v)),hwz(eya(u,v),eyb(u,v),eyc(u,v)),u,0,1.9999,v,0,1) | ref=eyes color=#ffffff
+# Big pupils, set a little towards the nose.
+pua(u,v)=hlx(0.33*(2*floor(u)-1),0.12-0.01*bk,0.04,0.1,0.135,0.165*bk,kt(u),2*v-1)
+pub(u,v)=hly(0.33*(2*floor(u)-1),0.12-0.01*bk,0.04,0.1,0.135,0.165*bk,kt(u),2*v-1)
+puc(u,v)=hlz(0.33*(2*floor(u)-1),0.12-0.01*bk,0.04,0.1,0.135,0.165*bk,kt(u),2*v-1)
+surface(hwx(pua(u,v),pub(u,v),puc(u,v)),hwy(pua(u,v),pub(u,v),puc(u,v)),hwz(pua(u,v),pub(u,v),puc(u,v)),u,0,1.9999,v,0,1) | ref=pupils color=#2b1d16
+# A big and a small highlight in each eye: tiles 0,1 have gb=1 (big), tiles 2,3 gb=0;
+# gsd is the eye (-1 right, 1 left).
+gb(u)=1-floor(u/2)
+gsd(u)=2*(floor(u)-2*floor(u/2))-1
+hia(u,v)=hlx(0.33*gsd(u)+0.065*gb(u)-0.06*(1-gb(u)),0.11+(0.075*gb(u)-0.065*(1-gb(u)))*bk,0.1,0.04,0.05*gb(u)+0.026*(1-gb(u)),(0.055*gb(u)+0.026*(1-gb(u)))*bk,kt(u),2*v-1)
+hib(u,v)=hly(0.33*gsd(u)+0.065*gb(u)-0.06*(1-gb(u)),0.11+(0.075*gb(u)-0.065*(1-gb(u)))*bk,0.1,0.04,0.05*gb(u)+0.026*(1-gb(u)),(0.055*gb(u)+0.026*(1-gb(u)))*bk,kt(u),2*v-1)
+hic(u,v)=hlz(0.33*gsd(u)+0.065*gb(u)-0.06*(1-gb(u)),0.11+(0.075*gb(u)-0.065*(1-gb(u)))*bk,0.1,0.04,0.05*gb(u)+0.026*(1-gb(u)),(0.055*gb(u)+0.026*(1-gb(u)))*bk,kt(u),2*v-1)
+surface(hwx(hia(u,v),hib(u,v),hic(u,v)),hwy(hia(u,v),hib(u,v),hic(u,v)),hwz(hia(u,v),hib(u,v),hic(u,v)),u,0,3.9999,v,0,1) | ref=shine color=#ffffff
+# Rosy cheeks.
+cha(u,v)=hlx(0.8*(2*floor(u)-1),-0.2,-0.03,0.045,0.16,0.11,kt(u),2*v-1)
+chb(u,v)=hly(0.8*(2*floor(u)-1),-0.2,-0.03,0.045,0.16,0.11,kt(u),2*v-1)
+chc(u,v)=hlz(0.8*(2*floor(u)-1),-0.2,-0.03,0.045,0.16,0.11,kt(u),2*v-1)
+surface(hwx(cha(u,v),chb(u,v),chc(u,v)),hwy(cha(u,v),chb(u,v),chc(u,v)),hwz(cha(u,v),chb(u,v),chc(u,v)),u,0,1.9999,v,0,1) | ref=cheeks color=#ff8fa3
+# A smile: a thin tube lying on the skin, along the path (smx,smy,smz) for g from -1 to 1.
+mb(g)=-0.28-0.09*(1-g*g)
+smx(g)=0.665*cos(mb(g))*cos(0.22*g)
+smy(g)=0.745*cos(mb(g))*sin(0.22*g)
+smz(g)=0.685*sin(mb(g))
+surface(hwx(smx(2*t-1)+0.022*tr(t)*cos(w),smy(2*t-1),smz(2*t-1)+0.022*tr(t)*sin(w)),hwy(smx(2*t-1)+0.022*tr(t)*cos(w),smy(2*t-1),smz(2*t-1)+0.022*tr(t)*sin(w)),hwz(smx(2*t-1)+0.022*tr(t)*cos(w),smy(2*t-1),smz(2*t-1)+0.022*tr(t)*sin(w)),t,0,1,w,0,2*pi) | ref=smile color=#5d2a1c
+# Antennae (sd = -1 right, 1 left) that wobble. Path (atx,aty,atz) for q from 0 to 1, with
+# direction (about 0.1, ady, adz); its tube circle lies across that direction.
+atx(q,sd)=0.37+0.1*q+0.07*q*q*sin(4*pi*a+sd)
+aty(q,sd)=sd*(0.2+0.3*q+0.08*sin(pi*q))+0.05*q*q*cos(4*pi*a+2*sd)
+atz(q,sd)=0.53+0.62*q+0.06*sin(pi*q)
+ady(q,sd)=sd*(0.3+0.2513*cos(pi*q))
+adz(q)=0.62+0.1885*cos(pi*q)
+anr(q)=0.03*(1-0.35*q)*tr(q)
+ana(q,sd,w)=atx(q,sd)+anr(q)*cos(w)
+anb(q,sd,w)=aty(q,sd)-anr(q)*sin(w)*adz(q)/sqrt(ady(q,sd)*ady(q,sd)+adz(q)*adz(q))
+anc(q,sd,w)=atz(q,sd)+anr(q)*sin(w)*ady(q,sd)/sqrt(ady(q,sd)*ady(q,sd)+adz(q)*adz(q))
+# Both antennae in one surface: u from 0 to 1 is the right one and 1 to 2 the left one;
+# aq leaves a short gap at each end of a tile where the tube is closed.
+aq(u)=cl((u-floor(u)-0.06)/0.88)
+surface(hwx(ana(aq(u),2*floor(u)-1,w),anb(aq(u),2*floor(u)-1,w),anc(aq(u),2*floor(u)-1,w)),hwy(ana(aq(u),2*floor(u)-1,w),anb(aq(u),2*floor(u)-1,w),anc(aq(u),2*floor(u)-1,w)),hwz(ana(aq(u),2*floor(u)-1,w),anb(aq(u),2*floor(u)-1,w),anc(aq(u),2*floor(u)-1,w)),u,0,1.9999,w,0,2*pi) | ref=antennae color=#689f38
+# A bobble on each tip.
+tba(u,v)=atx(1.06,2*floor(u)-1)+kw(kt(u),2*v-1)*0.11*ka(kt(u),2*v-1,pi)
+tbb(u,v)=aty(1.06,2*floor(u)-1)+kw(kt(u),2*v-1)*0.11*kb(kt(u),2*v-1,pi)
+tbc(u,v)=atz(1.06,2*floor(u)-1)+kw(kt(u),2*v-1)*0.11*kn(kt(u),2*v-1,pi)
+surface(hwx(tba(u,v),tbb(u,v),tbc(u,v)),hwy(tba(u,v),tbb(u,v),tbc(u,v)),hwz(tba(u,v),tbb(u,v),tbc(u,v)),u,0,1.9999,v,0,1) | ref=bobbles color=#ff7043
+
+# ---------- A soft shadow under the body and the raised head ----------
+# Two ribbons a little darker than the leaf, the narrower one darker still. They follow
+# the body at rest, so they do not need redrawing while it crawls.
+hdm(k)=atan(0.363*cos(0.75*k-1.3))
+shw(k)=(0.8*sr(k)+0.3*exp(-(k-7.9)*(k-7.9)/0.6))*sqrt(cl((k+0.45)/0.35)*cl((9.1-k)/1.1))
+shx(k,w)=-2.75+0.62*k-w*shw(k)*sin(hdm(k))
+shy(k,w)=mpy(k)+w*shw(k)*cos(hdm(k))
+surface(rx(shx(k,w),shy(k,w)),ry(shx(k,w),shy(k,w)),lz(shx(k,w),shy(k,w))+0.008,k,-0.45,9.1,w,-1,1) | ref=shadow color=#2f7a32
+surface(rx(shx(k,0.7*w),shy(k,0.7*w)),ry(shx(k,0.7*w),shy(k,0.7*w)),lz(shx(k,0.7*w),shy(k,0.7*w))+0.011,k,-0.3,8.9,w,-1,1) | ref=shadowcore color=#28682b
+
+# ---------- A ladybug friend near the tip of the leaf ----------
+# It stands at (2.95,0.12) on the leaf, facing the caterpillar. Ladybug point: c1 forward,
+# c2 to its left (in ladybug units of 1.4 leaf units), to world x and y.
+lgz=lz(2.95,0.12)
+lbx(c1,c2)=rx(2.95+1.4*(c1*cos(3.6)-c2*sin(3.6)),0.12+1.4*(c1*sin(3.6)+c2*cos(3.6)))
+lby(c1,c2)=ry(2.95+1.4*(c1*cos(3.6)-c2*sin(3.6)),0.12+1.4*(c1*sin(3.6)+c2*cos(3.6)))
+surface(lbx(0.2*sin(p)*cos(m),0.16*sin(p)*sin(m)),lby(0.2*sin(p)*cos(m),0.16*sin(p)*sin(m)),lgz+1.4*(0.01+0.15*cos(p)),p,0,pi/2,m,0,2*pi) | ref=shell color=#e53935
+surface(lbx(0.19+0.075*sin(p)*cos(m),0.095*sin(p)*sin(m)),lby(0.19+0.075*sin(p)*cos(m),0.095*sin(p)*sin(m)),lgz+1.4*(0.02+0.075*cos(p)),p,0,pi/2,m,0,2*pi) | ref=lbhead color=#212121
+# Six spots on the shell (2 by 3 tiles), all anchored at the shell centre.
+lsa(j)=0.08-0.095*j
+lsb(j)=0.07+0.045*j-0.0275*j^2
+lsh(c1,c2)=0.15*sqrt(cl(1-(c1/0.2)^2-(c2/0.16)^2))
+lsx(u,v)=kw(kt(u),kt(v))*(lsa(floor(v))+0.036*ka(kt(u),kt(v),pi))
+lsy(u,v)=kw(kt(u),kt(v))*((2*floor(u)-1)*lsb(floor(v))+0.036*kb(kt(u),kt(v),pi))
+lsz(u,v)=lgz+1.4*(0.01+kw(kt(u),kt(v))*(lsh(lsa(floor(v)),lsb(floor(v)))+0.02*kn(kt(u),kt(v),pi)))
+surface(lbx(lsx(u,v),lsy(u,v)),lby(lsx(u,v),lsy(u,v)),lsz(u,v),u,0,1.9999,v,0,2.9999) | ref=lbspots color=#1a1a1a
+# Two tiny eyes and two feelers.
+lea(u,v)=0.255+0.022*ka(kt(u),2*v-1,pi)
+leb(u,v)=(2*floor(u)-1)*0.042+0.022*kb(kt(u),2*v-1,pi)
+surface(lbx(lea(u,v),leb(u,v)),lby(lea(u,v),leb(u,v)),lgz+1.4*(0.065+0.022*kn(kt(u),2*v-1,pi)),u,0,1.9999,v,0,1) | ref=lbeyes color=#ffffff
+curve(lbx(0.24+0.12*q,0.03+0.06*q),lby(0.24+0.12*q,0.03+0.06*q),lgz+1.4*(0.08+0.08*q-0.05*q^2),q,0,1) | ref=lbanta color=#212121 thickness=3
+curve(lbx(0.24+0.12*q,-0.03-0.06*q),lby(0.24+0.12*q,-0.03-0.06*q),lgz+1.4*(0.08+0.08*q-0.05*q^2),q,0,1) | ref=lbantb color=#212121 thickness=3
+
+# ---------- Dew drops: see-through, so they come last ----------
+# Three drops (one tile each) at (dpx,dpy) on the leaf, radius dpr, each with a glint.
+dpx(i)=-1.55+1.2*i+0.15*i^2
+dpy(i)=-0.9-0.4*i+0.35*i^2
+dpr(i)=0.24-0.07*i+0.005*i^2
+gla(u,v)=dpx(floor(u))+dpr(floor(u))*(0.25+0.12*kw(kt(u),2*v-1)*ka(kt(u),2*v-1,pi/2))
+glb(u,v)=dpy(floor(u))+dpr(floor(u))*(-0.3+0.12*kw(kt(u),2*v-1)*kb(kt(u),2*v-1,pi/2))
+glc(u,v)=lz(dpx(floor(u)),dpy(floor(u)))-0.035+dpr(floor(u))*(0.66+0.03*kw(kt(u),2*v-1)*kn(kt(u),2*v-1,pi/2))
+surface(rx(gla(u,v),glb(u,v)),ry(gla(u,v),glb(u,v)),glc(u,v),u,0,2.9999,v,0,1) | ref=glints color=#ffffff
+dga(u,v)=dpx(floor(u))+kw(kt(u),2*v-1)*dpr(floor(u))*ka(kt(u),2*v-1,pi/2)
+dgb(u,v)=dpy(floor(u))+kw(kt(u),2*v-1)*dpr(floor(u))*kb(kt(u),2*v-1,pi/2)
+dgc(u,v)=lz(dpx(floor(u)),dpy(floor(u)))-0.02+kw(kt(u),2*v-1)*0.7*dpr(floor(u))*kn(kt(u),2*v-1,pi/2)
+surface(rx(dga(u,v),dgb(u,v)),ry(dga(u,v),dgb(u,v)),dgc(u,v),u,0,2.9999,v,0,1) | ref=drops color=#81d4fa opacity=0.5
+
+@view 3d azimuth=-20 elevation=34 unit=62 center=0,0,-0.2
+@set showAxes=false gridStyle=hidden
