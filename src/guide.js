@@ -11,7 +11,7 @@ export const FULL_SYNTAX_PATH = resolve(ROOT, 'Arch图形计算器语法与对�
 export const GUIDE_TOPICS = {
     workflow: {about: 'check/build/decompile loop and what errors vs warnings mean', headings: ['## Workflow']},
     format: {about: 'script lines, every object option, every directive', headings: ['## Script format']},
-    syntax: {about: 'expression rules, functions, math objects (curves, regions, parametric, root, point lists, 3D)', headings: ['### General rules', '### Functions', '### Math objects']},
+    syntax: {about: 'expression rules, functions, math objects (curves, regions, parametric curves and surfaces, root, point lists, 3D)', headings: ['### General rules', '### Functions', '### Math objects', '### Parametric curves and surfaces']},
     geometry: {about: 'every geometry command, what u means in point(P,host,u), units', headings: ['### Geometry commands', '### What u means', '### Units cheat sheet']},
     animation: {about: 'sliders that move things, @frames frame-by-frame playback', headings: ['### Making things move', '## Frame-by-frame animation']},
     text: {about: '@text canvas text boxes with live values', headings: ['## Canvas text']},

@@ -1,0 +1,21 @@
+# Parametric curves and surfaces with their own parameters (Arch 12201 and later).
+# A parametric object can name its parameters and their ranges, in three equivalent forms:
+#   tuple:   (X,Y,Z, u,umin,umax, v,vmin,vmax)        curves: (X,Y, q,qmin,qmax) or (X,Y,Z, q,qmin,qmax)
+#   braces:  x=X,y=Y,z=Z{u,umin,umax,v,vmin,vmax}     curves: x=X,y=Y{q,qmin,qmax}
+#   prefix:  surface(X,Y,Z,u,umin,umax,v,vmin,vmax)   curves: curve(X,Y,q,qmin,qmax)
+# Ranges may use variables: drag slider a to grow the torus around its ring.
+@title Parametric surfaces
+
+a=0.8 | min=0.05 max=1 step=0.0025
+
+# Torus: u goes around the ring, v around the tube.
+((2.2+0.7*cos(v))*cos(u),(2.2+0.7*cos(v))*sin(u),0.7*sin(v),u,0,2*pi*a,v,0,2*pi) | ref=torus color=#1e88e5 opacity=0.85
+# A sphere floating above it.
+surface(0.9*sin(p)*cos(m),0.9*sin(p)*sin(m),2.2+0.9*cos(p),p,0,pi,m,0,2*pi) | ref=ball color=#fb8c00
+# A Moebius strip below, in the brace form.
+x=(1.8+s*cos(w/2))*cos(w),y=(1.8+s*cos(w/2))*sin(w),z=s*sin(w/2)-2.4{w,0,2*pi,s,-0.6,0.6} | ref=strip color=#26a69a
+# A helix with its own parameter q, winding from the strip up to the sphere.
+curve(3.3*cos(q),3.3*sin(q),q/4-2.4,q,0,4*pi*a) | ref=helix color=#8e24aa thickness=4
+
+@view 3d azimuth=35 elevation=20 unit=55
+@set showAxes=false

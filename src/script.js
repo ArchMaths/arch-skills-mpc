@@ -176,8 +176,9 @@ function parseView(text, line) {
         case 'y': view.yrange = parseRange(raw, line, 'y'); break;
         case 'center': {
             const p = raw.split(',').map(Number);
-            if (p.length !== 2 || !p.every(Number.isFinite)) throw new ScriptError(line, 'center must look like center=0,0');
-            view.center = {x: p[0], y: p[1]};
+            if (![2, 3].includes(p.length) || !p.every(Number.isFinite))
+                throw new ScriptError(line, 'center must look like center=0,0 (2d) or center=0,0,1.5 (3d)');
+            view.center = {x: p[0], y: p[1], ...(p.length === 3 ? {z: p[2]} : {})};
             break;
         }
         case 'unit': {
@@ -198,6 +199,8 @@ function parseView(text, line) {
     if ((view.xrange || view.yrange) && (view.center || view.unit)) throw new ScriptError(line, 'Use either x=/y= ranges or center=/unit=, not both.');
     if ((view.azimuth !== undefined || view.elevation !== undefined) && view.dimension !== '3d')
         throw new ScriptError(line, 'azimuth/elevation need 3d, e.g. @view 3d azimuth=30 elevation=20');
+    if (view.center?.z !== undefined && view.dimension !== '3d')
+        throw new ScriptError(line, 'center=x,y,z needs 3d, e.g. @view 3d center=0,0,1.5');
     return view;
 }
 

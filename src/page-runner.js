@@ -2,7 +2,7 @@
 // Arch page. They must be self-contained: no imports, no outer variables.
 
 // Runs parsed script steps against the live Arch engine and exports the save file.
-export async function runSteps({steps, title, script}) {
+export async function runSteps({steps, title, script, messages = []}) {
     const e = window.archInstance;
     const api = new window.ArchAgentProtocol.AgentAPI(e);
     const lower = s => String(s).toLowerCase();
@@ -19,16 +19,23 @@ export async function runSteps({steps, title, script}) {
         ...(e.calcJSUtils.calc1 || []), ...(e.calcJSUtils.advancedCustomFunctionNames || []),
         ...Object.keys(e.calcJSUtils.constants || {}), ...e.geometryKeywords, 'root', 'intercept']);
 
+    // Same as translateArchMessage in messages.js, which passes its table in as `messages`.
     const translate = message => {
-        const known = {
-            '输入的表达式有误，请检查语法': 'syntax error in expression',
-            '未创建新对象，请检查语法与重名情况': 'nothing was created; check syntax and duplicate names'
-        };
-        for (const [zh, en] of Object.entries(known)) if (message.includes(zh)) return `${en} (${message})`;
-        return message;
+        const text = String(message);
+        for (const [zh, en] of messages) if (text.includes(zh)) return `${en} (${text})`;
+        return text;
     };
-    const substituteRefs = expr => expr.replace(/(?<![\w.])[A-Za-z_][A-Za-z0-9_]*/g,
-        token => refs.has(lower(token)) ? refs.get(lower(token)) : token);
+    // Parameter names a parametric curve or surface declares for itself, e.g. u and v in
+    // (cos(u),sin(u),v,u,0,1,v,0,1). They are local to that line, so refs never replace them.
+    const localParameters = expr => {
+        try {
+            return new Set((e.parseParametricSpec?.(expr)?.parameters || []).filter(p => !p.global).map(p => lower(p.name)));
+        } catch (_) {
+            return new Set();
+        }
+    };
+    const substituteRefs = (expr, keep = new Set()) => expr.replace(/(?<![\w.])[A-Za-z_][A-Za-z0-9_]*/g,
+        token => refs.has(lower(token)) && !keep.has(lower(token)) ? refs.get(lower(token)) : token);
     const topLevelArgs = inner => {
         const out = [];
         let depth = 0, cur = '';
@@ -49,7 +56,8 @@ export async function runSteps({steps, title, script}) {
             return /^[A-Za-z_]\w*$/.test(args[0]) ? args[0] : null;
         }
         const d = /^([A-Za-z_]\w*)\s*(\([^)]*\))?\s*=(?![=<>])/.exec(expr);
-        if (d && !['x', 'y', 'z', 't'].includes(lower(d[1]))) return d[1];
+        // Since Arch 12201, t may name a variable or function; a curve's t is then a local parameter.
+        if (d && !['x', 'y', 'z'].includes(lower(d[1]))) return d[1];
         return null;
     };
     const evalNumber = (value, what) => {
@@ -168,16 +176,19 @@ export async function runSteps({steps, title, script}) {
 
     const createStep = async step => {
         const {line} = step;
-        const expr = step.text ? step.expr : substituteRefs(step.expr);
+        const expr = step.text ? step.expr : substituteRefs(step.expr, localParameters(step.expr));
         const declared = step.text ? null : declaredName(expr);
         if (declared && refs.has(lower(declared)) && lower(refs.get(lower(declared))) !== lower(declared))
             return err(line, `"${declared}" is already used as a ref= label; pick a different object name`);
         const before = new Set(e.entries);
         try {
-            // objects.create rolls back and throws with Arch's own error prompt text.
-            await guarded(() => api.execute({tool: 'objects.create', args: {expression: expr}}));
+            if (step.text) await guarded(() => api.execute({tool: 'objects.create', args: {expression: expr}}));
+            // objects.create rolls back and throws with Arch's own error prompt text. It refuses
+            // braces, so ranges like x=cos(u),y=sin(u){u,0,pi} go in the way Arch's input box adds them.
+            else await refuseTextFallback(expr, () => /[{}]/.test(expr) ? rawCreate(expr)
+                : guarded(() => api.execute({tool: 'objects.create', args: {expression: expr}})));
         } catch (error) {
-            return err(line, `Arch rejected "${expr}": ${translate(error.message)}`);
+            return err(line, error.unreadable ? error.message : `Arch rejected "${expr}": ${translate(error.message)}`);
         }
         const created = e.entries.filter(en => !before.has(en));
         const norm = s => String(s || '').replace(/\s+/g, '').toLowerCase();
@@ -238,9 +249,19 @@ export async function runSteps({steps, title, script}) {
             await api.execute({tool: 'view.set', args: {center, unit: Math.min(...units)}});
         } else if (v.center || v.unit) {
             const args = {};
-            if (v.center) args.center = v.center;
+            if (v.center) args.center = {x: v.center.x, y: v.center.y};
             if (v.unit) args.unit = v.unit;
             await api.execute({tool: 'view.set', args});
+            if (v.center && v.center.z !== undefined) {
+                // Arch's "z方向位移" (z shift, Arch 12201+): the 3D box centre's height, stored in screen units.
+                if (!e.is3DMode) throw new Error('center=x,y,z is for 3d views; use center=x,y in 2d');
+                if (typeof e.setZViewOffset !== 'function') throw new Error('this Arch version cannot move the 3D view along z; use center=x,y');
+                const offset = v.center.z / e.scale3D;
+                if (!e.setZViewOffset(offset, false) && (e.offset3D.z || 0) !== offset) {
+                    e.offset3D.z = offset;
+                    e.recalculate3D();
+                }
+            }
         }
     };
 
@@ -274,13 +295,55 @@ export async function runSteps({steps, title, script}) {
         return created;
     });
 
+    // Since Arch 12201, input that Arch cannot read becomes a "//..." text note, with no error.
+    // While fn runs, stop that and collect Arch's reasons, so the line fails with an explanation.
+    const refuseTextFallback = async (expr, fn) => {
+        const before = new Set(e.entries), reasons = [];
+        let fellBack = false;
+        const restores = [
+            patch('addEntry', original => function (input, ...rest) {
+                if (typeof input === 'string' && input.startsWith('//')) { fellBack = true; return undefined; }
+                return original.call(this, input, ...rest);
+            }),
+            patch('parseInputInternal', original => function (...args) {
+                try { return original.apply(this, args); } catch (error) { reasons.push(String(error?.message || error)); throw error; }
+            }),
+            patch('applySnapshot', original => function (...args) {
+                for (const en of this.entries) if (!before.has(en) && en.compilationError) reasons.push(String(en.compilationError));
+                return original.apply(this, args);
+            })
+        ];
+        const unreadable = () => {
+            const why = [...new Set(reasons)].map(translate).join('; ');
+            return Object.assign(new Error(`Arch could not read "${expr}"${why ? `: ${why}` : '; check the syntax'}. (Arch's input box would have kept it as a // text note.)`), {unreadable: true});
+        };
+        let result;
+        try {
+            result = await fn();
+        } catch (error) {
+            throw fellBack ? unreadable() : error;
+        } finally {
+            restores.reverse().forEach(restore => restore());
+        }
+        // Arch has already restored its state, but the restore replaces every entry object, so
+        // the Agent API may count the old objects as new and report success.
+        if (fellBack) throw unreadable();
+        return result;
+    };
+    // Replaces an ArchEngine method for a while; returns the function that puts it back.
+    const patch = (name, wrap) => {
+        const own = Object.prototype.hasOwnProperty.call(e, name), original = e[name];
+        e[name] = wrap(original);
+        return () => { if (own) e[name] = original; else delete e[name]; };
+    };
+
     const operatorStep = async step => {
         const {line, name, params, body} = step;
         try { new Function(...params, body); } catch (error) {
             return err(line, `JavaScript syntax error in operator ${name}: ${error.message}`);
         }
         const key = lower(name);
-        if (builtinNames.has(key) || ['x', 'y', 'z', 't', 'e', 'pi'].includes(key))
+        if (builtinNames.has(key) || ['x', 'y', 'z', 'e', 'pi'].includes(key))
             return err(line, `"${name}" is a built-in name; choose another operator name`);
         if (e.entries.some(en => [en.name, en.key].some(n => n && lower(n) === key)))
             return err(line, `name "${name}" is already taken (names are case-insensitive)`);
@@ -390,10 +453,18 @@ export async function runSteps({steps, title, script}) {
     }
 
     // Final health check after every dependency exists.
+    const describeRanges = entry => (entry.parametricParameters || []).filter(p => !p.global).map(p => {
+        const value = text => {
+            try { return Number(e.evaluateExpressionWithCalcJS(String(text), Object.fromEntries(e.variables || []))).toPrecision(6) * 1; } catch (_) { return NaN; }
+        };
+        return `${p.name} ${value(p.minExpr)}..${value(p.maxExpr)}`;
+    }).join(', ');
     for (const entry of e.entries) {
         const line = lineOf.get(entry);
         const label = entry.name || entry.key || entry.autoNumber || entry.expr;
         if (entry.compilationError) warn(line, `${label}: ${entry.compilationError}`);
+        if (entry.parameterRangeError)
+            warn(line, `${label} is not drawn: ${translate(entry.parameterRangeError)}. Its parameter ranges currently evaluate to ${describeRanges(entry)}.`);
         if (entry.type === 'geometry' && entry.isMeaningful === false)
             warn(line, `${label} currently has no valid position/shape (no intersection, degenerate construction, parameter out of range, or outside the domain)`);
         if (entry.type === 'variable' && !Number.isFinite(entry.value))

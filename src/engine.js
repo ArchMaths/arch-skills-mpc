@@ -4,6 +4,7 @@ import {fileURLToPath} from 'node:url';
 import {chromium} from 'playwright-core';
 import {parseScript, ScriptError} from './script.js';
 import {runSteps, loadAndDescribe, previewScript, settle} from './page-runner.js';
+import {ARCH_MESSAGES, translateArchMessage} from './messages.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 export const DEFAULT_HTML = process.env.ARCH_HTML ? resolve(process.env.ARCH_HTML) : resolve(ROOT, 'index.html');
@@ -17,9 +18,10 @@ export const PREVIEW_MS = 2000;
 const PAGE_URL = 'https://arch.invalid/index.html';
 // Arch's own server calls fail because the network is blocked on purpose; that is not a script problem.
 const BLOCKED_NETWORK = /Failed to fetch|NetworkError|net::ERR_/;
-// Code Arch compiles from operators and @script (createSandboxedFunction = new Function) shows up
-// in stack traces with this frame; everything else is Arch's own code.
-const USER_CODE_FRAME = /eval at createSandboxedFunction/;
+// Code from operators and @script shows up in stack traces with one of these frames; everything
+// else is Arch's own code. Arch 12201+ runs that code in its QuickJS sandbox under the file names
+// arch-operator.js and arch-global-script.js; older builds compiled it with new Function.
+const USER_CODE_FRAME = /eval at createSandboxedFunction|arch-operator\.js|arch-global-script\.js/;
 
 // Uncaught errors on the build page, deduplicated (drawing errors repeat every frame).
 function pageErrorWarnings(pageErrors) {
@@ -194,7 +196,7 @@ export class ArchEngine {
             return capture(page, screenshotScale);
         };
         try {
-            result = await guard(slot.page.evaluate(runSteps, {steps: parsed.steps, title: parsed.title, script: parsed.script}),
+            result = await guard(slot.page.evaluate(runSteps, {steps: parsed.steps, title: parsed.title, script: parsed.script, messages: ARCH_MESSAGES}),
                 timeoutMs, 'Building the scene');
             if (screenshot && !(verifySlot && result.errors.length === 0)) png = await shoot(slot.page, 'Drawing the scene');
             else await guard(slot.page.evaluate(settle, 100), timeoutMs, 'Drawing the scene');
@@ -231,7 +233,7 @@ export class ArchEngine {
                     const problems = [...preview.problems, ...fromScript.map(e => e.message)];
                     result.scriptPreview = {seconds: PREVIEW_MS / 1000, problems};
                     for (const problem of problems)
-                        result.errors.push({line: parsed.script.line, message: `@script failed when run: ${problem}`});
+                        result.errors.push({line: parsed.script.line, message: `@script failed when run: ${translateArchMessage(problem)}`});
                 }
             } catch (error) {
                 if (!(error instanceof RunTimeout)) throw error;
@@ -283,14 +285,14 @@ function compareSaved(a, b) {
     const same = (x, y) => JSON.stringify(norm(x)) === JSON.stringify(norm(y));
     const diffs = [];
     if ((a.globalScript || '') !== (b.globalScript || '')) diffs.push('the global script');
-    for (const key of ['showPlaybackControls', 'totalFrames', 'playbackFPS', 'currentFrame', 'frameExpr'])
+    for (const key of ['showPlaybackControls', 'totalFrames', 'playbackFPS', 'currentFrame', 'frameExpr', 'offset3DZ'])
         if (!same(a[key], b[key])) diffs.push(`${key} ${JSON.stringify(a[key])} → ${JSON.stringify(b[key])}`);
     const texts = state => (state.annotations || []).filter(t => t.type === 'text')
         .map(t => [t.content, t.x, t.y, t.width, t.height, t.fontSize, t.color]);
     if (!same(texts(a), texts(b))) diffs.push('text boxes');
     (a.entries || []).forEach((entry, i) => {
         const other = (b.entries || [])[i] || {};
-        for (const key of ['displayFrame', 'bodyJs', 'params'])
+        for (const key of ['displayFrame', 'bodyJs', 'params', 'parametricParameters'])
             if (!same(entry[key], other[key])) diffs.push(`${entry.expr}: ${key}`);
     });
     return diffs.map(d => ({message: `Saved file reloads differently: ${d}`}));

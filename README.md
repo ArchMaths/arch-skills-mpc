@@ -4,7 +4,7 @@ Lets AI coding agents (Claude Code, Antigravity, Cursor, and other MCP or shell-
 
 The agent writes a short **scene script**: one Arch expression per line, plus styling options. This tool runs the script in the **real Arch engine** (your `index.html`, in headless Chrome, offline) through Arch's own Agent API, exports the save file with Arch's own exporter, reloads the file in a fresh page to prove it opens identically, and reports back:
 
-- per-line errors in Arch's words, plus checks Arch itself doesn't do (unknown object names, silently renamed duplicates, auto-created variables);
+- per-line errors in Arch's words (with English translations), plus checks Arch itself doesn't do (unknown object names, silently renamed duplicates, auto-created variables, and lines Arch would quietly keep as text notes);
 - every object with its computed value (coordinates, equations, measurements);
 - a screenshot of the file as a user will see it after opening it.
 
@@ -105,6 +105,14 @@ tangent(t2,parab,K,-1)        | color=orange
 
 `ref=` gives a math curve a name that later lines can use. The tool substitutes Arch's real auto-number (`func1`, `eq2`, ...), which an AI can't predict. Other options: `color opacity thickness hidden dash label fixed min max step mode play frame`. Directives: `@title @view @set @style`.
 
+Parametric curves and surfaces can declare their own parameters and ranges (Arch build 12201 and later):
+
+```
+(cos(q),sin(q),q,0,2*pi*a)                                # curve; x=cos(q),y=sin(q){q,0,2*pi*a} is the same
+surface(sin(u)*cos(v),sin(u)*sin(v),cos(u),u,0,pi,v,0,2*pi)   # sphere; (X,Y,Z,u,..,v,..) and x=..,y=..,z=..{u,..,v,..} too
+@view 3d azimuth=35 elevation=20 center=0,0,1                 # center=x,y,z also moves the 3D box along z
+```
+
 Scripts can also use Arch's JavaScript and presentation features:
 
 ```
@@ -119,7 +127,7 @@ setInterval(() => arch.valuesetting('a', Math.random()), 500);
 @end
 ```
 
-Full details, including an `arch.*` API reference, are in [docs/GUIDE.md](docs/GUIDE.md). There are more examples in `examples/` (`js-frames-text.arch` uses all of the above).
+Full details, including an `arch.*` API reference, are in [docs/GUIDE.md](docs/GUIDE.md). There are more examples in `examples/` (`js-frames-text.arch` uses all of the above, `parametric-surfaces.arch` the parametric forms).
 
 CLI:
 
@@ -147,16 +155,18 @@ Exit code 0 means OK, 1 means the script has errors, 2 means a usage or environm
 
 ## How it works
 
-`src/engine.js` serves `index.html` to Chrome from a made-up address (`https://arch.invalid`) that Playwright answers itself, and blocks every other request: no login, cloud, AI quota or notices. Because the page isn't `file://`, JavaScript in operators or `@script` can reach neither your disk nor the network. Page work has a 30 s limit, so an infinite loop fails the check instead of hanging. It waits for startup, then evaluates `src/page-runner.js` in the page. The runner uses `window.ArchAgentProtocol.AgentAPI` (the same validated API Arch's built-in Agent uses) for objects, styles, sliders, view and settings. Then it calls `archInstance.exportStateObject()` exactly as *Save* does. A second preloaded page runs `archInstance.loadState()` on the result (what *Open file* does) and compares every object, plus text boxes, frame settings, operator code and the script. If there is an `@script`, that page then runs it for 2 s, as the Run button would, to catch runtime errors. The MCP server keeps the browser and two preloaded pages warm, so a check takes about 1 s after the first call.
+`src/engine.js` serves `index.html` to Chrome from a made-up address (`https://arch.invalid`) that Playwright answers itself, and blocks every other request: no login, cloud, AI quota or notices. Because the page isn't `file://`, JavaScript in operators or `@script` can reach neither your disk nor the network (Arch 12201+ also runs that code in its own QuickJS sandbox). Page work has a 30 s limit, so an infinite loop fails the check instead of hanging. It waits for startup, then evaluates `src/page-runner.js` in the page. The runner uses `window.ArchAgentProtocol.AgentAPI` (the same validated API Arch's built-in Agent uses) for objects, styles, sliders, view and settings. Then it calls `archInstance.exportStateObject()` exactly as *Save* does. A second preloaded page runs `archInstance.loadState()` on the result (what *Open file* does) and compares every object, plus text boxes, frame settings, operator code and the script. If there is an `@script`, that page then runs it for 2 s, as the Run button would, to catch runtime errors. The MCP server keeps the browser and two preloaded pages warm, so a check takes about 1 s after the first call.
 
-The tool depends on `window.archInstance`, `window.ArchAgentProtocol` and the save format in `index.html`. After updating Arch, run `npm test`: it builds every example, checks computed values, and round-trips save files.
+The tool depends on `window.archInstance`, `window.ArchAgentProtocol` and the save format in `index.html`. The bundled `index.html` is Arch build 12201. After updating Arch, run `npm test`: it builds every example, checks computed values, and round-trips save files.
+
+Arch's input box keeps any line it cannot read as a `//` text note, without a message. The runner temporarily wraps `addEntry` while it creates each line, so such a line fails with Arch's reason instead. Arch's Agent API refuses `{` `}`, so lines with a parameter range in braces go in through `addEntry`, as Arch's own input box does.
 
 ## Limitations
 
 - Scripts can't express hand-drawn annotations, images, PDFs, audio or statistics tables. `arch_decompile` lists anything it drops.
-- JavaScript operators run in the user's Arch as soon as a file is opened; that's how Arch works, not something this tool adds. `@script` only runs when the user presses Run. Treat AI-written JavaScript like any code you ship: read it before sharing the file.
+- JavaScript operators run in the user's Arch as soon as a file is opened (in Arch's sandbox since build 12201); that's how Arch works, not something this tool adds. In that sandbox they are much slower than plain math, so keep them out of 3D surface equations. `@script` only runs when the user presses Run. Treat AI-written JavaScript like any code you ship: read it before sharing the file.
 - Arch bug: `length(...)` and `angle(...)` labels are not drawn when a measured point is created after a curve, equation or point list, or is the built-in `O`. The report warns about it with the workaround: create the points first and use `point(O,0,0)`.
-- Geometry commands are 2D. 3D supports surfaces, implicit 3D and space curves, plus camera angles.
+- Geometry commands are 2D. 3D supports surfaces, implicit 3D, parametric surfaces and space curves, plus camera angles, zoom and the box centre.
 - The saved view is pixels-per-unit around a center, so other screen sizes show a slightly different region.
 - Checks catch syntax errors, unknown names, renames and invalid objects. They can't tell whether a valid figure is the one you *meant*, which is what the screenshot and value list are for.
 

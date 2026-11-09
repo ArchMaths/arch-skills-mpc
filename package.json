@@ -8,7 +8,7 @@
     "arch-mcp": "src/mcp.js"
   },
   "scripts": {
-    "test": "node --test --test-concurrency=1 test/",
+    "test": "node --test --test-concurrency=1 test/*.test.js",
     "mcp": "node src/mcp.js",
     "install-skill": "node src/install-skill.js"
   },
