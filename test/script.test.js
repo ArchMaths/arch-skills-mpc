@@ -32,6 +32,12 @@ point(P,1,2) | label="Point P" dash=short fixed
     assert.equal(steps[7].target, 'last');
 });
 
+test('@set implicitPrecision is a saved setting', () => {
+    const {steps} = parseScript('@set implicitPrecision=12');
+    assert.deepEqual(steps[0].settings, [{name: 'implicitPrecision', value: '12'}]);
+    throwsAtLine('@set meshQuality=3', 1, /not saved in Arch files/);
+});
+
 test('trailing # comments are ignored except in text lines and quotes', () => {
     const {steps} = parseScript('y=x^2   # parabola\npoint(P,1,1) | label="#1" # first\n//keep # this\n@view x=-1..1 # zoom');
     assert.equal(steps[0].expr, 'y=x^2');

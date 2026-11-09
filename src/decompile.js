@@ -121,6 +121,9 @@ export function decompile(saveText) {
     add('geometryMeasurementDisplay', state.geometryMeasurementDisplayEnabled);
     add('showHiddenMath', state.showHiddenMath);
     add('showHiddenGeo', state.showHiddenGeo);
+    // Saved as Arch's mesh step; the setting is the slider value 20/step (default step 5, value 4).
+    if (Number.isFinite(state.implicitPrecisionStep) && state.implicitPrecisionStep > 0 && state.implicitPrecisionStep !== 5)
+        add('implicitPrecision', Math.round(20 / state.implicitPrecisionStep * 1000) / 1000);
     if (settings.length) lines.push(`@set ${settings.join(' ')}`);
 
     if (state.showPlaybackControls) {

@@ -136,6 +136,7 @@ node src/cli.js examples/circle-motion.arch                 # writes examples/ci
 node src/cli.js --check scene.arch --png shot.png           # validate + screenshot, no file
 node src/cli.js --check scene.arch --png s.png --png-scale 0.5  # 640x400 screenshot
 node src/cli.js scene.arch -o out.txt --brief               # report only status, errors, warnings
+node src/cli.js big-3d-scene.arch --timeout 300              # allow each step up to 300 s (default 30)
 node src/cli.js --decompile "My graph.txt" -o mygraph.arch  # save file -> script
 node src/cli.js --guide                                     # print the guide
 node src/cli.js --guide geometry,animation                  # print only these topics

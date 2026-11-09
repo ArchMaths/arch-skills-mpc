@@ -26,6 +26,8 @@ Options:
   --no-verify        skip reloading the saved file to confirm it round-trips
                      (this also skips the @script preview)
   --no-script-preview  store @script without test-running it
+  --timeout <s>      seconds each step (build, draw, reload) may take before the
+                     run is stopped (default 30); raise it for very large 3D scenes
   --html <path>      Arch index.html to use (default: ARCH_HTML or ./index.html)
   --json             print the full result as JSON
 
@@ -53,6 +55,11 @@ function parseArgs(argv) {
             const scale = Number(value());
             if (!(scale >= 0.1 && scale <= 1)) throw new Error('--png-scale must be a number from 0.1 to 1');
             args.pngScale = scale;
+        }
+        else if (a === '--timeout') {
+            const seconds = Number(value());
+            if (!(seconds > 0)) throw new Error('--timeout must be a positive number of seconds');
+            args.timeoutMs = seconds * 1000;
         }
         else if (a === '--brief') args.brief = true;
         else if (a === '--html') args.html = value();
@@ -106,7 +113,7 @@ async function main() {
 
     const engine = new ArchEngine(args.html ? {htmlPath: args.html} : {});
     try {
-        const result = await engine.run(readInput(args.input), {screenshot: Boolean(args.png), screenshotScale: args.pngScale ?? 1, verify: args.verify, scriptPreview: args.scriptPreview});
+        const result = await engine.run(readInput(args.input), {screenshot: Boolean(args.png), screenshotScale: args.pngScale ?? 1, verify: args.verify, scriptPreview: args.scriptPreview, timeoutMs: args.timeoutMs});
         if (args.png && result.png) writeFileSync(resolve(args.png), result.png);
         const scriptPng = args.png && result.scriptPng ? args.png.replace(/(\.png)?$/i, '-script.png') : undefined;
         if (scriptPng) writeFileSync(resolve(scriptPng), result.scriptPng);
