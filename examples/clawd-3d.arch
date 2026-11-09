@@ -1,0 +1,54 @@
+# Clawd, the Claude Code mascot, as an animated 3D figure.
+# Every part is a rounded box: (X/w)^n+(Y/d)^n+(Z/h)^n=1 with a large even n.
+# One slider a (0..1, one 8 s loop) drives everything: Clawd turns around once,
+# lingering while it faces the camera, walks in place, waves its arms and blinks twice.
+# The @script at the end plays the loop. A script is used instead of slider autoplay because
+# Arch pauses every slider when a file switches the view to 3D, and because Arch's performance
+# mode halves the 3D mesh resolution while a slider plays, which breaks up the eyes and legs.
+# While a script runs, Arch turns performance mode off, so Clawd keeps its full detail.
+@title Clawd 3D
+
+//Press Run in the code panel to animate Clawd, or drag slider a.
+a=0 | min=0 max=1 step=0.00125 mode=forward
+
+# Turn: eased so Clawd turns slowly while facing the camera and quickly while facing away.
+turn=2*pi*a-0.8*sin(2*pi*a)
+rc=cos(turn)
+rs=sin(turn)
+# Walk cycle: 8 steps per loop. Diagonal leg pairs lift in turn, the body bobs, arms wave.
+ph=16*pi*a
+sp=sin(ph)
+bob=0.06*abs(cos(ph))
+legup=0.1*abs(sp)
+legsw=0.1*sp
+wv=0.18*sp
+# Eye height factor: 1 when open, nearly 0 during the two blinks (a=0.08 and a=0.9).
+blink=1-0.95*exp(-800*(1-cos(2*pi*(a-0.08))))-0.95*exp(-800*(1-cos(2*pi*(a-0.9))))
+
+# Each part is a rounded box (X/w)^n+(Y/d)^n+(Z/h)^n=1, where X=(x*rc+y*rs) and Y=(y*rc-x*rs)
+# are Clawd's own left-right and back-front coordinates (its face looks toward -Y) and the
+# feet stand on the z=0 grid. Clawd is mirror-symmetric, so abs(X) draws both arms or both
+# eyes with one surface, and abs(abs(X)-0.875) all four legs (at X=+-0.625 and +-1.125);
+# sign(X) makes the arms wave in opposite directions and picks each leg's step phase.
+# Fewer surfaces matter: Arch rebuilds every moving 3D surface on each animation frame.
+((x*rc+y*rs)/1.5)^10+((y*rc-x*rs)/0.95)^10+((z-1.5-bob)/1)^10=1 | ref=body color=#ff9a6e
+((abs(x*rc+y*rs)-1.8)/0.35)^8+((y*rc-x*rs)/0.3)^8+((z-1.25-bob+wv*sign(x*rc+y*rs))/0.25)^8=1 | ref=arms color=#ff9a6e
+((abs(abs(x*rc+y*rs)-0.875)-0.25)/0.17)^8+((y*rc-x*rs)/0.3)^8+((z-0.4-legup+legsw*sign(x*rc+y*rs)*sign(abs(x*rc+y*rs)-0.875))/0.4)^8=1 | ref=legs color=#ff9a6e
+# The eyes stick out of the front face a little, so the coarse 3D mesh never loses them.
+((abs(x*rc+y*rs)-0.875)/0.15)^8+((y*rc-x*rs+0.9)/0.2)^8+((z-1.75-bob)/(0.25*blink))^8=1 | ref=eyes color=black
+# Soft round shadow on the floor. It does not move, so Arch never has to rebuild it.
+(x^2+y^2)/1.6^2+(z/0.1)^2=1 | ref=shadow color=black opacity=0.2
+
+@view 3d azimuth=-60 elevation=20 unit=60
+@set showAxes=false
+
+# Loops a from where the slider is, one loop every 8 s. playState 0 stops slider playback,
+# so the slider's own play button and the script never fight over a.
+@script
+const loopMs = 8000;
+const start = Date.now() - arch.calc('a') * loopMs;
+setInterval(() => {
+  const a = ((Date.now() - start) % loopMs) / loopMs;
+  arch.valuesetting('a', a, 1, 0, 0.00125, 0);
+}, 30);
+@end

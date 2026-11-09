@@ -1,0 +1,147 @@
+# Clawd, the Claude Code mascot, dancing in 3D.
+# Same rounded-box figure as clawd-3d.arch. Slider a (0..1) is one 16 s routine at 120 BPM,
+# 32 beats in four 8-beat sections:
+#   1. groove: bounce on every beat, sway side to side, pump the arms in turn
+#   2. hop-spin: a hop on every beat, turning 45 degrees per hop, arms up
+#   3. side-steps: step, lean into each beat and twist, arms swinging
+#   4. finale: shimmy with both arms waving, crouch, spinning jump, land, ta-da
+# Every move fades in and out at the section edges, so the routine loops seamlessly.
+# Clawd stands on a stage at z=-2, so the figure sits in the middle of Arch's 3D box.
+# Press Run in the code panel to play it (see clawd-3d.arch for why a script, not autoplay).
+@title Clawd dance
+
+# The choreography: dance(k, u) is move k at routine position u (0..1).
+#   1 turn (radians)  2 sway (x shift)  3 hop (height)  4 roll (lean, radians)
+#   5 squash (+ squash, - stretch)  6, 7 arm raise angles (radians)  8, 9 leg lift and swap
+#   10 eye opening (1 open, ~0 closed)
+@operator dance(k, u)
+  const PI = Math.PI;
+  const b = (u - Math.floor(u)) * 32;                 // beat, 0..32
+  const sec = Math.min(3, Math.floor(b / 8));         // section, 0..3
+  const s = b - 8 * sec;                              // beat within the section, 0..8
+  const f = s - Math.floor(s);                        // phase within the beat, 0..1
+  const ease = v => v <= 0 ? 0 : v >= 1 ? 1 : v * v * (3 - 2 * v);
+  const env = ease(s / 0.75) * ease((8 - s) / 0.75);  // fade in and out at section edges
+  const arc = v => 4 * v * (1 - v);                   // jump arc: 0 at take-off and landing
+  const pos = v => Math.max(0, v);
+  let mTurn = 0, mSway = 0, mHop = 0, mRoll = 0, mSquash = 0, arm1 = 0, arm2 = 0, up = 0, swap = 0;
+  if (sec === 0) {
+    mSway = 0.35 * Math.sin(PI * s / 2) * env;
+    mRoll = -0.1 * Math.sin(PI * s / 2) * env;
+    mTurn += 0.25 * Math.sin(PI * s / 4) * env;
+    mSquash = 0.1 * Math.cos(PI * s) ** 2 * env;
+    arm1 = 1.1 * pos(Math.sin(PI * s)) * env;
+    arm2 = 1.1 * pos(-Math.sin(PI * s)) * env;
+    up = 0.12 * Math.abs(Math.sin(PI * s)) * env;
+    swap = 0.12 * Math.sin(PI * s) * env;
+  } else if (sec === 1) {
+    mHop = 0.45 * arc(f) * env;
+    mTurn += PI / 4 * (Math.floor(s) + ease(f));
+    mSquash = (0.18 * (Math.exp(-((f / 0.1) ** 2)) + Math.exp(-(((1 - f) / 0.1) ** 2))) - 0.1 * arc(f)) * env;
+    arm1 = arm2 = (0.9 + 0.3 * arc(f)) * env;
+  } else if (sec === 2) {
+    mSway = 0.45 * Math.sin(PI * s / 4) * env;
+    mRoll = 0.18 * Math.sin(PI * s) * env;
+    mTurn += 0.5 * Math.sin(PI * s / 2) * env;
+    mSquash = 0.06 * Math.cos(PI * s) ** 2 * env;
+    arm1 = (0.6 + 0.6 * Math.sin(PI * s)) * env;
+    arm2 = (0.6 - 0.6 * Math.sin(PI * s)) * env;
+    up = 0.15 * Math.abs(Math.sin(PI * s)) * env;
+    swap = 0.15 * Math.sin(PI * s) * env;
+  } else if (s < 4) {
+    const fade = ease(s / 0.75);
+    mRoll = 0.1 * Math.sin(4 * PI * s) * fade;
+    mSquash = 0.05 * Math.cos(2 * PI * s) ** 2 * fade;
+    arm1 = (1.2 + 0.3 * Math.sin(2 * PI * s)) * fade;
+    arm2 = (1.2 - 0.3 * Math.sin(2 * PI * s)) * fade;
+  } else if (s < 5) {
+    const v = ease(s - 4);
+    mSquash = 0.05 + 0.17 * v;
+    arm1 = arm2 = 1.2 - 1.6 * v;
+  } else if (s < 7) {
+    const v = (s - 5) / 2;
+    mHop = 0.75 * arc(v);
+    mTurn += 2 * PI * ease(v);
+    mSquash = 0.22 * (1 - ease(v / 0.15)) - 0.1 * Math.sin(PI * v);
+    arm1 = arm2 = -0.4 + 1.7 * ease(v / 0.3);
+  } else {
+    const v = s - 7;
+    mSquash = 0.25 * Math.exp(-((v / 0.15) ** 2)) * (1 - ease(v));
+    arm1 = arm2 = 1.3 * (1 - ease((v - 0.3) / 0.7));
+  }
+  // Leaning pivots about the floor centre; lift the body so the lower feet stay on the floor.
+  mHop += 1.25 * Math.abs(Math.sin(mRoll));
+  let eyes = 1;
+  for (const t of [3, 12.5, 20, 27]) eyes -= 0.95 * Math.exp(-(((b - t) / 0.12) ** 2));
+  return [0, mTurn, mSway, mHop, mRoll, mSquash, arm1, arm2, up, swap, eyes][k];
+@end
+
+//Press Run in the code panel to make Clawd dance, or drag slider a.
+a=0 | min=0 max=1 step=0.000625 mode=forward
+
+turn=dance(1,a)
+sway=dance(2,a)
+hop=dance(3,a)
+roll=dance(4,a)
+squash=dance(5,a)
+armone=dance(6,a)
+armtwo=dance(7,a)
+legup=dance(8,a)
+legsw=dance(9,a)
+blink=dance(10,a)
+
+# All the body moves together make one affine map from the world (x,y,z) to Clawd's own
+# coordinates: shift by sway and hop (from the stage top at z=-2), undo the turn and the
+# lean, then undo the squash.
+#   X = u1*x+u2*y+u3*z+u0 (left-right), Y = v1*x+v2*y+v0 (back-front, face toward -Y),
+#   Z = w1*x+w2*y+w3*z+w0 (up, feet at Z=0).
+rc=cos(turn)
+rs=sin(turn)
+fc=cos(roll)
+fs=sin(roll)
+kw=1+0.5*squash
+kh=1-squash
+u1=rc*fc/kw
+u2=rs*fc/kw
+u3=fs/kw
+u0=-(rc*fc*sway+fs*(hop-2))/kw
+v1=-rs/kw
+v2=rc/kw
+v0=rs*sway/kw
+w1=-fs*rc/kh
+w2=-fs*rs/kh
+w3=fc/kh
+w0=(fs*rc*sway-fc*(hop-2))/kh
+# Arm angles. Each arm turns about its shoulder (|X|=1.5, Z=1.25); sign(X) picks the side,
+# so the angle's cosine is cm+cd*sign(X) and its sine sm+sd*sign(X).
+cm=(cos(armone)+cos(armtwo))/2
+cd=(cos(armtwo)-cos(armone))/2
+sm=(sin(armone)+sin(armtwo))/2
+sd=(sin(armtwo)-sin(armone))/2
+
+# The stage: a round platform whose top is at z=-2. It never moves, so Arch never rebuilds it.
+# It comes before the shadow: Arch draws surfaces in list order, and the see-through shadow
+# only darkens what is already drawn behind it.
+((x^2+y^2)/2.6^2)^4+((z+2.15)/0.15)^8=1 | ref=stage color=#e3dacc
+# Shadow on the stage: follows the sway and shrinks while Clawd is in the air.
+((x-sway)^2+y^2)/(1.6-0.4*hop)^2+((z+2)/0.1)^2=1 | ref=shadow color=black opacity=0.25
+
+# The parts, as in clawd-3d.arch: rounded boxes (X/w)^n+(Y/d)^n+(Z/h)^n=1. abs(X) draws both
+# arms or both eyes with one surface, and abs(abs(X)-0.875) all four legs.
+((u1*x+u2*y+u3*z+u0)/1.5)^10+((v1*x+v2*y+v0)/0.95)^10+((w1*x+w2*y+w3*z+w0-1.5)/1)^10=1 | ref=body color=#ff9a6e
+(((abs(u1*x+u2*y+u3*z+u0)-1.5)*(cm+cd*sign(u1*x+u2*y+u3*z+u0))+(w1*x+w2*y+w3*z+w0-1.25)*(sm+sd*sign(u1*x+u2*y+u3*z+u0))-0.3)/0.35)^8+((v1*x+v2*y+v0)/0.3)^8+(((w1*x+w2*y+w3*z+w0-1.25)*(cm+cd*sign(u1*x+u2*y+u3*z+u0))-(abs(u1*x+u2*y+u3*z+u0)-1.5)*(sm+sd*sign(u1*x+u2*y+u3*z+u0)))/0.25)^8=1 | ref=arms color=#ff9a6e
+((abs(abs(u1*x+u2*y+u3*z+u0)-0.875)-0.25)/0.17)^8+((v1*x+v2*y+v0)/0.3)^8+((w1*x+w2*y+w3*z+w0-0.4-legup+legsw*sign(u1*x+u2*y+u3*z+u0)*sign(abs(u1*x+u2*y+u3*z+u0)-0.875))/0.4)^8=1 | ref=legs color=#ff9a6e
+((abs(u1*x+u2*y+u3*z+u0)-0.875)/0.15)^8+((v1*x+v2*y+v0+0.9)/0.2)^8+((w1*x+w2*y+w3*z+w0-1.75)/(0.25*blink))^8=1 | ref=eyes color=black
+
+@view 3d azimuth=-80 elevation=15 unit=64
+@set showAxes=false gridStyle=hidden
+
+# Loops a from where the slider is, one routine every 16 s.
+@script
+const loopMs = 16000;
+const start = Date.now() - arch.calc('a') * loopMs;
+setInterval(() => {
+  const a = ((Date.now() - start) % loopMs) / loopMs;
+  arch.valuesetting('a', a, 1, 0, 0.000625, 0);
+}, 30);
+@end
