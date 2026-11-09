@@ -53,7 +53,8 @@ test('mistakes are reported per line and nothing is marked ok', async () => {
     assert.match(result.errors[0].message, /already taken.*a_1/);
     assert.match(result.errors[1].message, /unknown name\(s\) "cc"/);
     assert.match(result.errors[2].message, /"A", "B"/);
-    assert.match(result.errors[3].message, /syntax error/);
+    // Since Arch 12201, Arch keeps unreadable input as a text note; the tool reports it as an error.
+    assert.match(result.errors[3].message, /could not read "sin\(": unbalanced brackets/);
     assert.ok(result.warnings.some(w => w.line === 2 && /auto-created variable a=1/.test(w.message)));
 });
 
@@ -98,8 +99,10 @@ test('operators, text boxes, frames and the global script reach the save file', 
 test('JavaScript problems are reported, and loops time out', async () => {
     const run = src => engine.run(src, {screenshot: false, timeoutMs: 4000});
     const cases = [
-        ['y=x\n@script\nundefinedThing.go();\n@end', 2, /undefinedThing is not defined/],
-        ['y=x\n@script\nsetTimeout(() => { arch.nosuchfunction(1); }, 100);\n@end', 2, /arch\.nosuchfunction is not a function/],
+        // Arch 12201+ runs scripts in QuickJS, whose messages differ from Chrome's.
+        ['y=x\n@script\nundefinedThing.go();\n@end', 2, /error in @script.*undefinedThing'? is not defined/],
+        ['y=x\n@script\nsetTimeout(() => { arch.nosuchfunction(1); }, 100);\n@end', 2, /not a function/],
+        ['y=x\n@script\nfetch("https://example.com/");\n@end', 2, /blocked by Arch's script sandbox/],
         ['y=x\n@script\nlet = = 3;\n@end', 2, /syntax error/],
         ['y=x\n@script\nwhile (true) {}\n@end', 2, /did not finish within 4 s/],
         ['@operator bad(u)\n  return u +* 2;\n@end', 1, /syntax error in operator bad/],
@@ -157,4 +160,46 @@ test('screenshots can be rendered at a smaller scale, including after @script', 
     assert.deepEqual(pngSize(result.png), [640, 400]);
     assert.deepEqual(pngSize(result.scriptPng), [640, 400]);
     assert.deepEqual(pngSize((await engine.run('y=x', {screenshot: true})).png), [1280, 800]);
+});
+
+test('parametric curves and surfaces with their own parameters (Arch 12201+)', async () => {
+    const result = await engine.run([
+        'a=0.5',
+        '(cos(u),sin(u),u,0,2*pi*a) | ref=arc',                                  // tuple curve
+        'x=cos(q),y=sin(q){q,0,pi} | ref=half',                                   // brace curve
+        'y=x^2 | ref=v',                                                          // a ref named like a parameter
+        'surface(sin(u)*cos(v),sin(u)*sin(v),cos(u),u,0,pi,v,0,2*pi) | ref=ball', // v stays the parameter
+        'x=u,y=v,z=u*v{u,-1,1,v,-1,a} | ref=saddle',                              // brace surface, range uses a
+        '@view 3d center=0,0,1.5'
+    ].join('\n'), {screenshot: false});
+    assert.deepEqual(result.errors, []);
+    assert.deepEqual(result.warnings, []);
+    const state = JSON.parse(result.json);
+    const saved = expr => state.entries.find(e => e.expr === expr);
+    assert.deepEqual(saved('(cos(u),sin(u),u,0,2*pi*a)').parametricParameters, [{name: 'u', minExpr: '0', maxExpr: '2*pi*a', global: false}]);
+    assert.equal(saved('x=cos(q),y=sin(q){q,0,pi}').plotType, 'parametric');
+    assert.equal(saved('surface(sin(u)*cos(v),sin(u)*sin(v),cos(u),u,0,pi,v,0,2*pi)').plotType, 'parametricSurface');
+    assert.deepEqual(saved('x=u,y=v,z=u*v{u,-1,1,v,-1,a}').parametricParameters.map(p => [p.name, p.minExpr, p.maxExpr]),
+        [['u', '-1', '1'], ['v', '-1', 'a']]);
+    assert.ok(Math.abs(state.offset3DZ * state.scale3D - 1.5) < 1e-9, 'z shift of the 3D view is saved');
+    const again = decompile(result.json).script;
+    assert.match(again, /@view 3d .*center=0,0,1\.5/);
+});
+
+test('unreadable lines and empty parameter ranges are reported', async () => {
+    const bad = await engine.run('y=2x+\n(cos(u),sin(u),u,0,u)\ncurve(cos(u),sin(u),u,0,1,v,0,1)', {screenshot: false});
+    assert.deepEqual(bad.errors.map(e => e.line), [1, 2, 3]);
+    assert.ok(bad.errors.every(e => /could not read .*text note/.test(e.message)));
+    assert.match(bad.errors[1].message, /range bound cannot use its own parameter/);
+    assert.match(bad.errors[2].message, /tuple has 2, 3, 5, 6 or 9 items/);
+    assert.ok(!bad.objects.some(o => o.type === 'text'), 'no text notes were left behind');
+    const empty = await engine.run('a=2\n(cos(u),sin(u),u,u,a,1,v,0,1)\n@view 3d', {screenshot: false});
+    assert.ok(empty.ok);
+    assert.ok(empty.warnings.some(w => w.line === 2 && /not drawn.*min < max.*u 2\.\.1/.test(w.message)));
+});
+
+test('t can name a variable or an operator (Arch 12201+)', async () => {
+    const result = await engine.run('t=2\ny=t*x\n@operator twice(t)\n  return 2 * t;\n@end\ny=twice(x)', {screenshot: false});
+    assert.deepEqual(result.errors, []);
+    assert.equal(byName(result, 't').value, 2);
 });

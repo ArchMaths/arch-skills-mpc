@@ -11,7 +11,7 @@ Arch is a GeoGebra-like graphing calculator. You describe a figure as a **scene 
 3. Fix and re-check until clean, then build (`arch_build` / `arch-build scene.arch -o out.txt`).
 4. To change an existing save file: decompile it (`arch_decompile` / `arch-build --decompile`), edit the script, rebuild.
 
-The build stops with errors (and writes nothing) for syntax errors, unknown object names, renamed duplicates, and invalid options. Warnings mean the file is valid but something may be unintended. Take them seriously, especially "no valid position" and "auto-created variable".
+The build stops with errors (and writes nothing) for syntax errors, unknown object names, renamed duplicates, and invalid options. Arch's own input box keeps a line it cannot read as a `//` text note without any message; the tool reports that line as an error instead, with Arch's reason. Warnings mean the file is valid but something may be unintended. Take them seriously, especially "no valid position" and "auto-created variable".
 
 ## Script format
 
@@ -56,7 +56,7 @@ Animation speed: Arch advances about `100*step` per second. For a span L in T se
 ### Directives
 
 - `@title Name`: file name shown in Arch.
-- `@view x=a..b y=c..d`: fit this region (2D). Or `@view center=x,y unit=N` (N = pixels per unit). For 3D: `@view 3d azimuth=35 elevation=25` (degrees). `@view 2d` switches back.
+- `@view x=a..b y=c..d`: fit this region (2D). Or `@view center=x,y unit=N` (N = pixels per unit). For 3D: `@view 3d azimuth=35 elevation=25` (degrees), plus `unit=N` to zoom and `center=x,y,z` to move the 3D box so it is centred on that point (z is Arch's z shift; use it instead of moving every object). `@view 2d` switches back.
 - `@set name=value ...`: saved document settings only: `showAxes`, `showAxisNumbers`, `showPointLabels` (true/false), `gridStyle` (`grid|dots|polar|hidden`), `tmin`, `tmax` (parametric t range, default -2*pi..2*pi), `geometryMeasurementDisplay`, `showHiddenMath`, `showHiddenGeo`.
 - `@style target | options`: restyle an existing object by name, ref, auto-number, or `last`.
 - `@text x=.. y=.. [size=] [color=] [width=] [height=] [smart|plain] | content`: canvas text box (see below).
@@ -71,7 +71,7 @@ Always add an `@view` that frames the interesting part; Arch's default is center
 ### General rules
 - One object per line. ASCII only: `( ) , . + - * / ^`. Function calls need parentheses: `sin(x)`.
 - **Names are case-insensitive**: `A` and `a` clash, and `F` clashes with a function `f`. Use distinct names (`P1`, `Q2`, `rot`, ...).
-- Do not name things `x y z t e pi`, built-in function names, geometry keywords, `O`, `Xaxis`, `Yaxis`, or auto-number patterns like `func1`.
+- Do not name things `x y z e pi`, built-in function names, geometry keywords, `O`, `Xaxis`, `Yaxis`, or auto-number patterns like `func1`. `t` may name a variable or function; a parametric curve without its own range still uses `t` as its parameter.
 - Constants: `pi` (or `π`) and `e`. Write `0.001` or `10^(-3)` rather than `1e-3`.
 - Implicit multiplication works (`2x`, `2(x+1)`, `2sin(x)`), but write `*` between multi-letter names (`a*b`).
 - Not supported: `%`, `!` (use `gamma(n+1)`), `|x|` (use `abs(x)`), `&&`, `||`, `==`, `!=`, `?:`, chained inequalities `-1<x<1`, degree symbols.
@@ -94,13 +94,29 @@ Always add an `@view` that frames the interesting part; Arch's default is center
 | `y=x^2+1`, `x=y^2-1` | Explicit curve (auto-number `funcN`). |
 | `x^2+y^2=4`, `x*y=1` | Implicit curve (`eqN`). |
 | `x^2+y^2<=4`, `y>x^2` | Inequality region (`eqN`). One relation per line. |
-| `x=cos(t),y=sin(t)` | Parametric curve in t (`paraN`), x first then y. The t range is global (`@set tmin= tmax=`). |
+| `x=cos(t),y=sin(t)` | Parametric curve in t (`paraN`), x first then y. The t range is global (`@set tmin= tmax=`). For a curve with its own parameter and range, and for parametric surfaces, see below. |
 | `r=root[x^2-2,x,1]` | Numeric root of expr=0 from start value 1 (square brackets, expression not equation). |
 | `/-/(0,0)(1,1)(2,0)/(3,1)(4,0)` | Point list / polyline (`plistN`); a top-level `/` starts a new piece. |
 | `2+3` | Computed value entry. |
-| 3D (after `@view 3d`): `z=x^2+y^2`, `x^2+y^2+z^2=9`, `x=cos(t),y=sin(t),z=t` | Surfaces and space curves. Geometry commands are 2D only. |
+| 3D (after `@view 3d`): `z=x^2+y^2`, `x^2+y^2+z^2=9`, `x=cos(t),y=sin(t),z=t`, `(sin(u)*cos(v),sin(u)*sin(v),cos(u),u,0,pi,v,0,2*pi)` | Surfaces, space curves and parametric surfaces. Geometry commands are 2D only. |
 
 Single-letter names used before being defined are **auto-created** as variables (value 1, range -2..2), and the report warns. Define variables first.
+
+### Parametric curves and surfaces
+
+A parametric object can declare its own parameters, each with a range. Three spellings mean the same thing:
+
+| Form | Curve (2D or 3D) | Surface (3D) |
+|---|---|---|
+| tuple | `(cos(q),sin(q),q,0,2*pi)`, `(cos(q),sin(q),q/4,q,0,8*pi)` | `(X,Y,Z,u,umin,umax,v,vmin,vmax)` |
+| braces | `x=cos(q),y=sin(q){q,0,2*pi}` | `x=X,y=Y,z=Z{u,umin,umax,v,vmin,vmax}` |
+| prefix | `curve(cos(q),sin(q),q,0,2*pi)` | `surface(X,Y,Z,u,umin,umax,v,vmin,vmax)` |
+
+- The coordinates come first (x, y and, for 3D, z), then `name,min,max` for each parameter: one for a curve, two for a surface. A tuple therefore has 2, 3, 5, 6 or 9 items; with 2 or 3 items it is a curve in the global `t`.
+- Parameter names are local to their line: any plain name except `x y z e pi`, built-in functions and `sum prod int diff diffat`. They hide variables or refs with the same name on that line only. The two parameters of a surface need different names.
+- Ranges may use variables and sliders (`u,0,2*pi*a`), but not the line's own parameters. Each range needs min < max; otherwise the object is not drawn and the report warns.
+- Parametric surfaces are meshed at Arch's *equation, inequality and parametric surface precision* (the same setting as implicit 3D surfaces). Write them in plain math, not with `@operator` functions (see below).
+- Examples: torus `((2+0.6*cos(v))*cos(u),(2+0.6*cos(v))*sin(u),0.6*sin(v),u,0,2*pi,v,0,2*pi)`; Moebius strip `x=(1+s*cos(w/2))*cos(w),y=(1+s*cos(w/2))*sin(w),z=s*sin(w/2){w,0,2*pi,s,-0.4,0.4}`.
 
 ### Geometry commands (2D). The new object's name is always the first argument.
 
@@ -201,6 +217,7 @@ y=clamp(2*sin(x),-1,1)
 - The body is a JavaScript function body that **returns a number**. Parameters are plain numbers. Use `Math.*`.
 - After definition the operator works in every expression, slider, geometry argument and `{value(...)}`.
 - Arch calls it thousands of times while drawing, so keep it fast and pure: no timers, no DOM, no `arch` calls.
+- Arch runs operators in its script sandbox (QuickJS, isolated from the page and the network). Each call is much slower than plain math: an operator inside a 3D surface made meshing about 50 times slower (440 ms instead of 8 ms). Use operators for values computed once per change (`turn=dance(1,a)`), not inside surfaces or dense curves.
 - If it throws, Arch silently turns that value into NaN. The tool reports how often it threw. An infinite loop makes the build time out.
 - Names follow the usual rules: unique, case-insensitive, not a built-in.
 - **Operators run in the user's Arch when they open the file**, so only write ordinary math code.
@@ -221,6 +238,7 @@ setInterval(() => {
 - Create the objects with normal script lines. Use the program to change them: running `arch.create` adds new objects every time the user presses Run.
 - The tool syntax-checks it, and also **runs it for 2 seconds in an isolated copy** (no network, no file access) and reports runtime errors, plus a second screenshot. The saved file is never modified by that test run.
 - It is JavaScript in strict mode with `arch`, `setInterval`, `clearInterval`, `setTimeout`, `clearTimeout`, `addEventListener` provided. Stopping the script clears its timers, listeners and pen drawings.
+- Arch runs it in its script sandbox (QuickJS): network access and opening web pages are blocked, and error messages read like `'name' is not defined` rather than Chrome's wording.
 
 ### The `arch` API (most useful parts)
 
@@ -262,4 +280,6 @@ Calls marked *(async)* take effect on the next tick, so do not read their result
 11. `frame=` without an `@frames` line (it has no effect), or expecting frame 0 to hide framed objects.
 12. `arch.createfunc(...)` without `visible` = 1, or `valuesetting` with min and max swapped.
 13. Creating objects inside `@script` that the scene script already creates (duplicates on every Run).
-14. Arch bug: `length(...)` and `angle(...)` labels are not drawn if a measured point is created after any curve, equation or point list, or is the built-in `O`. Create the measured points first and use `point(O,0,0)` rather than the built-in origin.
+14. Writing a parametric range that uses its own parameter (`(cos(u),sin(u),u,0,u)`), or one with min ≥ max.
+15. Calling an `@operator` inside a 3D surface: it works, but meshing becomes very slow.
+16. Arch bug: `length(...)` and `angle(...)` labels are not drawn if a measured point is created after any curve, equation or point list, or is the built-in `O`. Create the measured points first and use `point(O,0,0)` rather than the built-in origin.

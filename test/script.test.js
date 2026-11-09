@@ -164,3 +164,9 @@ test('decompile covers operators, frames, text boxes and the global script', () 
     assert.equal(parsed.steps.filter(s => s.kind === 'text').length, 2);
     assert.ok(parsed.script);
 });
+
+test('@view 3d center=x,y,z', () => {
+    assert.deepEqual(parseScript('@view 3d center=0,0,1.5').steps[0].view, {dimension: '3d', center: {x: 0, y: 0, z: 1.5}});
+    assert.throws(() => parseScript('@view center=0,0,1'), /needs 3d/);
+    assert.throws(() => parseScript('@view 3d center=0,0,1,2'), /center must look like/);
+});

@@ -101,6 +101,10 @@ export function decompile(saveText) {
         const view = ['@view 3d'];
         if (Number.isFinite(state.camera3DTheta)) view.push(`azimuth=${num(state.camera3DTheta * 180 / Math.PI)}`);
         if (Number.isFinite(state.camera3DPhi)) view.push(`elevation=${num(90 - state.camera3DPhi * 180 / Math.PI)}`);
+        // The 3D box centre is stored in screen units (offset3D); scale3D converts it to graph units.
+        const centre = ['offset3DX', 'offset3DY', 'offset3DZ'].map(k => (Number(state[k]) || 0) * (Number(state.scale3D) || 1));
+        if (centre[2] === 0) centre.pop();
+        if (centre.some(v => v !== 0)) view.push(`center=${centre.map(v => num(Math.round(v * 1e9) / 1e9)).join(',')}`);
         lines.push(view.join(' '));
     } else if (Number.isFinite(state.scale)) {
         const c = state.viewportCenter2D && Number.isFinite(state.viewportCenter2D.x) ? state.viewportCenter2D : {x: 0, y: 0};
