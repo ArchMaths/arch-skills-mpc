@@ -9,9 +9,10 @@ design sheet with nothing but parametric surfaces and a few curves.
 | `claude-chan-3d.arch` | The scene script it was built from (428 objects). |
 | `generate.py` | Writes the scene script. `face.py`, `outfit.py`, `hair.py` and `scene.py` are its parts. |
 
-Opening the file takes a few minutes: it is saved with `implicitPrecision=10`, so each surface is
-meshed on a 125 x 125 grid instead of Arch's default 50 x 50. Lower the *equation, inequality and
-parametric surface precision* slider in Arch's settings for faster redraws while rotating.
+Opening the file takes several minutes (it is about 10 MB): it is saved with `implicitPrecision=10`, so
+each surface is meshed on a 125 x 125 grid instead of Arch's default 50 x 50, and the turned head's
+surfaces are about three times as long to evaluate. Lower the *equation, inequality and parametric
+surface precision* slider in Arch's settings for faster redraws while rotating.
 
 ## What is modelled
 
