@@ -6,7 +6,7 @@ design sheet with nothing but parametric surfaces and a few curves.
 | File | |
 |---|---|
 | `claude-chan-3d.txt` | The Arch save file. Open it with Arch's *Open file*. |
-| `claude-chan-3d.arch` | The scene script it was built from (413 objects). |
+| `claude-chan-3d.arch` | The scene script it was built from (416 objects). |
 | `generate.py` | Writes the scene script. `face.py`, `outfit.py`, `hair.py` and `scene.py` are its parts. |
 
 Opening the file takes a few minutes: it is saved with `implicitPrecision=10`, so each surface is
@@ -17,7 +17,8 @@ parametric surface precision* slider in Arch's settings for faster redraws while
 
 - **Head**: sculpted from parts. The face is a stack of horizontal arcs whose width, depth and
   roundness change with height, so it has a real profile: forehead, the dip between the eyes, a small
-  pointed nose, lips, a receding chin, and a jawline that runs up to the ear. Cheeks, brow and eye
+  pointed nose, lips, a receding chin, and a jawline that runs up to the ear. Seen from the front the
+  outline is a small chin under full, round cheeks; the round of each cheek, the brow and the eye
   sockets are shallow bumps and hollows on top. Under the jaw, the neck, and ears with helix, fold,
   concha, tragus and lobe.
 - **Face**: long, half-lidded eyes as on the sheet: a heavy, nearly level lash line that ends in a wing,
@@ -53,10 +54,12 @@ node src/cli.js examples/claude-chan/claude-chan-3d.arch -o examples/claude-chan
 - Every part is a parametric surface `(X,Y,Z,u,u0,u1,v,v0,v1)`. Shared shapes are Arch user functions.
 - **Face.** For each height `h` the face is a superellipse arc from one side of the head around the
   front to the other: half-width `fwd(h)`, depth `fd(h)`, exponent `fq(h)` (boxy across the eyes,
-  rounder along the jaw). The side profile `fpl(h)` is a natural cubic spline through points read off
-  the sheet, written for Arch as `a + b d + sum c_i max(0, h - k_i)^3`. `fr(p,h)` adds the nose, lips,
-  chin, cheeks, brow and eye sockets as Gaussian bumps. The same surface is drawn as six patches that
-  share their edges exactly, so the nose and mouth get a finer mesh than the forehead.
+  rounder over the cheeks and jaw). The side profile `fpl(h)` and the front outline `fws(h)` are
+  natural cubic splines through points read off the sheet, written for Arch as
+  `a + b d + sum c_i max(0, h - k_i)^3`. `fr(p,h)` adds the nose, lips, chin, cheeks, brow and eye
+  sockets as Gaussian bumps. The same surface is drawn as nine patches (each cheek, the nose and mouth,
+  each eye, the bridge of the nose, the brow) that share their edges exactly, so every part gets its
+  own fine mesh and no seam shows.
 - **Eyes, brows, mouth** are thin decals that follow the face. Arch expands user functions as text, so
   a decal that called the full face function with a long argument would grow to thousands of terms;
   `generate.py` fits the face over the eye and brow regions with small polynomials (within 0.001) and

@@ -33,17 +33,21 @@ the neck and the ears. The face mask is a stack of horizontal arcs, one per heig
 side of the head around the front to the other side: half-width fwd(h), depth fd(h), and a superellipse
 exponent fq(h) that makes it boxy across the eyes (a flat front that turns quickly at the cheekbones) and
 rounder along the jaw. fpl(h) is the profile of the face seen from the side (forehead, the dip between the
-eyes, the plane of the cheeks and mouth, chin). fr adds what is narrower than the whole face: the nose,
-lips, chin, cheeks, brow and eye sockets. fy(p,h) is the y of the skin at x=p, z=h.""")
+eyes, the plane of the cheeks and mouth, chin), and fws(h) the outline seen from the front: a small chin,
+full round cheeks, level sides. fr adds what is narrower than the whole face: the nose, lips, chin, the
+round of each cheek, brow and eye sockets. fy(p,h) is the y of the skin at x=p, z=h.""")
 sc.func('smn(a,b,c)', '(a+b-sqrt((a-b)^2+c^2))/2')
 R = lambda dz, y: (ZE + dz, y)
 spline_fn('fpl', [R(-0.71, -0.44), R(-0.693, -0.478), R(-0.655, -0.515), R(-0.6, -0.54), R(-0.53, -0.56),
                  R(-0.47, -0.585), R(-0.38, -0.607), R(-0.265, -0.618), R(-0.15, -0.6),
                  R(-0.05, -0.583), R(0.03, -0.578), R(0.12, -0.592), R(0.22, -0.607), R(0.38, -0.613),
                  R(0.52, -0.596), R(0.66, -0.555), R(0.82, -0.48)])
-sc.func('fwd(h)', f"smn(smn(0.645,0.69*sqrt(max(0,1-(max(0,h-{fmt(ZE + 0.3)})/0.86)^2)),0.04),1.05*sqrt(max(0,(h-{fmt(HC)})*(h-{fmt(HC - 0.1)}))),0.1)")
-sc.func('fd(h)', f"smn({fmt(Y0)}-fpl(h),1.25*fwd(h),0.08)")
-sc.func('fq(h)', f"0.3-0.115*exp(-((h-{fmt(ZE - 0.03)})/0.2)^2)+0.1/(1+exp((h-{fmt(ZE - 0.5)})/0.06))")
+T_ = lambda t, w: (HC + t, w)
+spline_fn('fws', [T_(0, 0.03), T_(0.05, 0.098), T_(0.105, 0.167), T_(0.16, 0.253), T_(0.22, 0.338), T_(0.32, 0.462), T_(0.42, 0.556), T_(0.52, 0.614),
+                  T_(0.62, 0.645), T_(0.71, 0.651), T_(0.9, 0.655), T_(1.2, 0.645), T_(1.49, 0.56), T_(1.56, 0.525)])
+sc.func('fwd(h)', f"fws(h)*sqrt(max(0,h-{fmt(HC)})/(h-{fmt(HC - 0.025)}))")
+sc.func('fd(h)', f"smn({fmt(Y0)}-fpl(h),1.18*fwd(h),0.08)")
+sc.func('fq(h)', f"0.3-0.11*exp(-((h-{fmt(ZE)})/0.14)^2)+0.15/(1+exp((h-{fmt(ZE - 0.3)})/0.07))")
 NT = ZE - 0.235     # height of the tip of the nose
 sc.func('fno(h)', f"0.07*exp(-(max(0,h-{fmt(NT)})/0.075)^1.4-(max(0,{fmt(NT)}-h)/0.03)^2)")
 sc.func('fr(p,h)',
@@ -55,18 +59,22 @@ sc.func('fr(p,h)',
         f"-0.006*exp(-((h-{fmt(ZE - 0.61)})/0.06)^2-(p/0.1)^2)"
         f"+0.02*exp(-((abs(p)-0.33)/0.17)^2-((h-{fmt(ZE + 0.02)})/0.1)^2)"
         f"-0.008*exp(-((abs(p)-0.3)/0.2)^2-((h-{fmt(ZE + 0.24)})/0.07)^2)"
-        f"-0.02*exp(-((abs(p)-0.3)/0.17)^2-((h-{fmt(ZE - 0.24)})/0.15)^2)")
+        f"-0.034*exp(-((abs(p)-0.3)/0.19)^2-((h-{fmt(ZE - 0.22)})/0.16)^2)"
+        f"-0.016*exp(-((abs(p)-0.26)/0.17)^2-((h-{fmt(ZE - 0.44)})/0.12)^2)")
 sc.func('fy(p,h)', 'fpl(h)+fd(h)*(1-max(0,1-(p/fwd(h))^2)^fq(h))+fr(p,h)')
 
 HN = ZE + 0.14      # the lower patches (nose, mouth, chin) end here
 HT = ZE + 0.78
 FS = 0.36
 MASK = ('fwd(h)*sin(f)', 'fpl(h)+fd(h)*(1-abs(cos(f))^(2*fq(h)))+fr(fwd(h)*sin(f),h)', 'h')
-sc.comment("""The mask is drawn as six patches of the same surface, so the nose, lips and chin get a finer
-mesh than the cheeks and forehead. Patches share their edges exactly, so no seam shows.""")
-for nm, hr, fr_ in (('faceMid', (HC, HN), (-FS, FS)), ('faceLeft', (HC, HN), (FS, 'pi/2')), ('faceRight', (HC, HN), ('-pi/2', -FS)),
-                    ('browMid', (HN, HT), (-FS, FS)), ('browLeft', (HN, HT), (FS, 'pi/2')), ('browRight', (HN, HT), ('-pi/2', -FS))):
-    sc.surface(MASK, ('h', hr[0], hr[1]), ('f', fr_[0], fr_[1]), SKIN, nm, ('point', (0, 0.2, ZE + 0.1)))
+HK = ZE - 0.07      # the cheek patches end here, just under the eyes
+sc.comment("""The mask is drawn as nine patches of the same surface, three across and three up: cheek, nose and
+mouth, cheek; eye, bridge of the nose, eye; and the brow. So the cheeks, nose, lips and chin each get
+their own fine mesh. Patches share their edges exactly, so no seam shows.""")
+for row, hr in (('', (HC, HK)), ('Eye', (HK, HN)), ('Brow', (HN, HT))):
+    for col, fr_ in (('Right', ('-pi/2', -FS)), ('Mid', (-FS, FS)), ('Left', (FS, 'pi/2'))):
+        nm = {'Right': 'cheekRight', 'Mid': 'noseMouth', 'Left': 'cheekLeft'}[col] if not row else f'face{row}{col}'
+        sc.surface(MASK, ('h', hr[0], hr[1]), ('f', fr_[0], fr_[1]), SKIN, nm, ('point', (0, 0.2, ZE + 0.1)))
 
 sc.comment("Underside of the jaw: chords between the two sides of the jawline, arched up a little in the middle.")
 HJ = ZE - 0.12
