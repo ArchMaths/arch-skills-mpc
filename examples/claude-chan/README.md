@@ -6,7 +6,7 @@ design sheet with nothing but parametric surfaces and a few curves.
 | File | |
 |---|---|
 | `claude-chan-3d.txt` | The Arch save file. Open it with Arch's *Open file*. |
-| `claude-chan-3d.arch` | The scene script it was built from (416 objects). |
+| `claude-chan-3d.arch` | The scene script it was built from (428 objects). |
 | `generate.py` | Writes the scene script. `face.py`, `outfit.py`, `hair.py` and `scene.py` are its parts. |
 
 Opening the file takes a few minutes: it is saved with `implicitPrecision=10`, so each surface is
