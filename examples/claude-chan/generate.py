@@ -26,12 +26,13 @@ PARTS = set(args.parts.split(','))
 def want(p): return 'all' in PARTS or p in PARTS
 
 # ---------------- palette ----------------
-SKIN = '#edb9a3'
-SKIN_SH = '#e0a48f'
-HAIR_HI = '#f6a25e'
-HAIR = '#e2671d'
-HAIR_DK = '#c9531a'
-HAIR_LT = '#ea7424'
+SKIN = '#e4beb4'
+SKIN_SH = '#d3a79c'
+HAIR_HI = '#f2a76a'
+HAIR = '#d86a2c'
+HAIR_DK = '#c35d25'
+HAIR_LT = '#e07736'
+HAIR_SH = '#a3481b'
 CREAM = '#f3e9d8'
 CREAM_DK = '#e3d3bb'
 BLACK = '#1f1b22'
@@ -84,104 +85,8 @@ def ellipsoid(C, R, color, ref, fr=None, orient='closed', urange=(0, 'pi'), opac
 # =====================================================================
 #  HEAD AND FACE
 # =====================================================================
-ZC = 12.0  # head centre
 if want('head'):
     run('face.py')
-
-# =====================================================================
-#  HAIR
-# =====================================================================
-if want('hair'):
-    sc.blank()
-    sc.note('Hair')
-    sc.comment("""Hair shell around the head: th = angle from the crown, ph = angle from the front (+ toward her left),
-rr = radius factor. The cap covers the crown, sides and back; bangs are separate pointed strands.""")
-    sc.func('hx(th,ph,rr)', '1.06*rr*sin(th)*sin(ph)')
-    sc.func('hy(th,ph,rr)', '0.03-1.1*rr*sin(th)*cos(ph)')
-    sc.func('hz(th,ph,rr)', '12.0+1.12*rr*cos(th)')
-    sc.func('hp(k)', 'pi*(0.35*k+0.65*k^3)')
-    sc.func('hm(k)', '1.05+1.45*sin(hp(k)/2)^2+0.75*exp(-((abs(hp(k))-1.2)/0.25)^2)')
-    sc.func('hg(s,k)', '0.985+0.012*s*sin(30*hp(k))')
-    sc.surface(('hx(s*hm(k),hp(k),hg(s,k))', 'hy(s*hm(k),hp(k),hg(s,k))', 'hz(s*hm(k),hp(k),hg(s,k))'),
-               ('s', 0, 1), ('k', -1, 1), HAIR, 'hairCap', ('point', (0, 0, 12)))
-    sc.comment("""A bang strand runs from the crown (angle a0, azimuth p0) to its tip (a1, p1) with width wd; its
-cross-section is a lens, and its tip curls in by cu. t runs root to tip, w around the strand.""")
-    sc.func('sth(t,a0,a1)', 'a0+(a1-a0)*t')
-    sc.func('sph(t,w,a0,a1,p0,p1,wd)', 'p0+(p1-p0)*t^1.5+wd*(1-t)^0.7*(0.5+t)*cos(w)/max(0.35,sin(sth(t,a0,a1)))')
-    sc.func('srr(t,w,cu)', '1+0.07*(1-t)^0.3*sin(w)-cu*t^3')
-    bangs = [  # a0, a1, p0, p1, wd, curl, colour: side-swept toward her right, parted on her left
-        (0.3, 1.88, 0.25, -0.02, 0.17, 0.0, HAIR),
-        (0.3, 1.66, 0.42, 0.38, 0.2, 0.04, HAIR),
-        (0.25, 1.7, 0.1, -0.38, 0.24, 0.04, HAIR),
-        (0.3, 1.85, -0.25, -0.72, 0.24, 0.02, HAIR),
-        (0.35, 1.8, 0.62, 0.74, 0.22, 0.02, HAIR),
-        (0.35, 2.1, -0.6, -1.0, 0.22, 0.0, HAIR_DK),
-        (0.35, 2.05, 0.85, 1.0, 0.2, 0.0, HAIR_DK),
-        (0.25, 1.6, 0.18, 0.15, 0.1, 0.03, HAIR_LT),
-        (0.25, 1.75, -0.05, -0.2, 0.1, 0.03, HAIR_LT),
-        (0.22, 1.45, 0.3, 0.12, 0.2, 0.03, HAIR_LT),
-        (0.28, 1.95, 0.34, -0.1, 0.05, 0.0, HAIR_LT),     # thin wisps crossing the face
-        (0.3, 1.82, -0.12, -0.5, 0.05, 0.0, HAIR_LT),
-        (0.3, 1.9, 0.56, 0.44, 0.045, 0.0, HAIR),
-    ]
-    def fit_curl(a0, a1, p1, gap=0.035):
-        """Curl so the tip sits `gap` in front of the face (when the tip is over the face)."""
-        fyf = sc.ns.get('fy')
-        def tip(R):
-            return (1.06 * R * math.sin(a1) * math.sin(p1), 0.03 - 1.1 * R * math.sin(a1) * math.cos(p1), 12.0 + 1.12 * R * math.cos(a1))
-        x, y, z = tip(1.0)
-        if fyf is None or not (10.95 < z < 12.7) or abs(x) > 0.8 * sc.ns['fcw'](z):
-            return None
-        lo, hi = 0.7, 1.05
-        for _ in range(50):
-            R = (lo + hi) / 2
-            x, y, z = tip(R)
-            if y < fyf(x, z) - gap:
-                hi = R
-            else:
-                lo = R
-        return round(1 - R, 4)
-    for i, (a0, a1, p0, p1, wd, cu, col) in enumerate(bangs, 1):
-        cu = fit_curl(a0, a1, p1) or cu
-        args_ = f"t,w,{fmt(a0)},{fmt(a1)},{fmt(p0)},{fmt(p1)},{fmt(wd)}"
-        th = f"sth(t,{fmt(a0)},{fmt(a1)})"
-        ph = f"sph({args_})"
-        rr = f"srr(t,w,{fmt(cu)})"
-        sc.surface((f"hx({th},{ph},{rr})", f"hy({th},{ph},{rr})", f"hz({th},{ph},{rr})"),
-                   ('t', 0, 1), ('w', 0, '2*pi'), col, f'bang{i}', ('tube', 'u'))
-        if wd > 0.1:
-            # shine: a light streak across the strand near the crown (part of the hair's halo highlight)
-            ta, tb = 0.24 + 0.03 * (i % 3), 0.4 + 0.03 * (i % 3)
-            wexp = f"{fmt(wd * 0.5)}*sin(pi*(t-{fmt(ta)})/{fmt(tb - ta)})^0.8"
-            ph2 = f"sph(t,w,{fmt(a0)},{fmt(a1)},{fmt(p0)},{fmt(p1)},{wexp})"
-            rr2 = f"(srr(t,w,{fmt(cu)})+0.006)"
-            sc.surface((f"hx({th},{ph2},{rr2})", f"hy({th},{ph2},{rr2})", f"hz({th},{ph2},{rr2})"),
-                       ('t', ta, tb), ('w', 0.25, 2.89), HAIR_HI, f'bangShine{i}', ('point', (0, 0, 12)))
-    # two little ahoge strands at the crown
-    sc.comment("Two small loose strands sticking up from the crown.")
-    for i, pts_, wd in ((1, [(0.05, 0.05, 13.02), (0.12, -0.2, 13.42), (0.42, -0.42, 13.4), (0.36, -0.2, 13.2)], 0.04),
-                        (2, [(-0.04, 0.12, 13.03), (-0.14, -0.05, 13.32), (-0.34, -0.12, 13.3), (-0.3, 0.02, 13.16)], 0.03)):
-        pts = pts_
-        cx_, cy_, cz_ = bezier_poly(pts)
-        X = f"{horner(cx_, 's')}+{fmt(wd)}*(1-s)*cos(w)"
-        Y = f"{horner(cy_, 's')}"
-        Z = f"{horner(cz_, 's')}+{fmt(wd * 0.4)}*(1-s)*sin(w)"
-        sc.surface((X, Y, Z), ('s', 0, 1), ('w', 0, '2*pi'), HAIR, f'ahoge{i}', ('tube', 'u'))
-
-    sc.comment("""Hanging strands (sidelocks, back hair): a centre line (polynomial in s, from a Bezier curve) with a
-horizontal lens cross-section, half-width hw(s)*a and half-thickness ht(s)*b, turned by angle al.""")
-    sc.func('hw(s)', '(1-s)^0.75*(0.7+0.3*min(1,4*s))*(1.15-0.2*s)')
-    sc.func('ht(s)', '(1-s)^0.4*(0.6+0.4*min(1,4*s))')
-
-    def strand(pts, a, b, al, color, ref, wave=None):
-        """pts: Bezier control points; a, b: half width/thickness; al: Arch expr (in s) of the width direction angle."""
-        cx_, cy_, cz_ = bezier_poly(pts)
-        wx = wave[0] if wave else '0'
-        wy = wave[1] if wave else '0'
-        X = f"{horner(cx_, 's')}+{wx}+{fmt(a)}*hw(s)*cos(w)*cos({al})-{fmt(b)}*ht(s)*sin(w)*sin({al})"
-        Y = f"{horner(cy_, 's')}+{wy}+{fmt(a)}*hw(s)*cos(w)*sin({al})+{fmt(b)}*ht(s)*sin(w)*cos({al})"
-        Z = f"{horner(cz_, 's')}"
-        sc.surface((X, Y, Z), ('s', 0, 1), ('w', 0, '2*pi'), color, ref, ('tube', 'u'))
 
 # =====================================================================
 #  HAIR ORNAMENT (her left side): chrysanthemum on a black bow, ribbons, gold tassel
@@ -278,27 +183,6 @@ def tassel(top, length, color, ref, r=0.05, knob=GOLD):
     ellipsoid((x, y, zt - 0.02), (r * 0.62, r * 0.62, 0.03), knob, ref + 'Band')
 
 
-if want('ornament'):
-    sc.blank()
-    sc.note('Hair ornament: chrysanthemum on a black bow, cream ribbons, gold tassel')
-    th, ph = 1.02, 1.12
-    P = (1.06 * 1.04 * math.sin(th) * math.sin(ph), 0.03 - 1.1 * 1.04 * math.sin(th) * math.cos(ph), 12.0 + 1.12 * 1.04 * math.cos(th))
-    nrm = unit((P[0] / 1.06 ** 2, (P[1] - 0.03) / 1.1 ** 2, (P[2] - 12.0) / 1.12 ** 2))
-    nrm = unit(add(mul(nrm, 0.85), (0, -0.45, 0)))
-    C = add(P, mul(nrm, 0.16))
-    fr = frame(nrm, (0, 0, 1))
-    # bow behind the flower: loops up-back and down-front, gold rims
-    bow_axis = unit(add(mul(fr[1], 1.0), mul(fr[0], 0.35)))
-    bfr = frame_ab(bow_axis, nrm)
-    bow(add(C, mul(nrm, -0.08)), bfr, (0.5, 0.2, 0.07), 'hairBow')
-    # ribbon tails hanging from under the flower
-    base = add(C, (0.03, 0.0, -0.18))
-    face = unit((1, -0.35, 0))
-    ribbon([base, add(base, (0.12, -0.05, -0.5)), add(base, (0.1, -0.12, -1.1))], 0.07, CREAM, 'hairRibbon1', face, rim=GOLD)
-    ribbon([add(base, (0.02, 0.1, 0)), add(base, (0.16, 0.12, -0.45)), add(base, (0.18, 0.18, -0.9))], 0.08, BLACK, 'hairRibbon2', face, rim=GOLD)
-    flower(C, nrm, 0.34, 'hairFlower')
-    tassel(add(C, (0.06, -0.08, -0.22)), 0.75, GOLD, 'hairTassel', r=0.05)
-
 run('outfit.py')
 if want('earrings'):
     sc.blank()
@@ -311,6 +195,24 @@ if want('earrings'):
         tassel((top[0], top[1], top[2] - 0.15), 0.4, GOLD, f'earTassel{tag}', r=0.035)
 
 run('hair.py')
+
+if want('ornament'):
+    sc.blank()
+    sc.note('Hair ornament: chrysanthemum on a black bow, cream ribbons, gold tassel')
+    C, nrm = ORN_P, ORN_N
+    fr = frame(nrm, (0, 0, 1))
+    # bow behind the flower: loops up-back and down-front, gold rims
+    bow_axis = unit(add(mul(fr[1], 1.0), mul(fr[0], 0.35)))
+    bfr = frame_ab(bow_axis, nrm)
+    bow(add(C, mul(nrm, -0.07)), bfr, (0.42, 0.17, 0.06), 'hairBow')
+    # ribbon tails hanging from under the flower
+    base = add(C, (0.03, 0.0, -0.15))
+    face = unit((1, -0.35, 0))
+    ribbon([base, add(base, (0.1, -0.04, -0.42)), add(base, (0.09, -0.1, -0.92))], 0.06, CREAM, 'hairRibbon1', face, rim=GOLD)
+    ribbon([add(base, (0.02, 0.08, 0)), add(base, (0.13, 0.1, -0.38)), add(base, (0.15, 0.15, -0.76))], 0.068, BLACK, 'hairRibbon2', face, rim=GOLD)
+    flower(C, nrm, 0.29, 'hairFlower')
+    tassel(add(C, (0.05, -0.07, -0.19)), 0.64, GOLD, 'hairTassel', r=0.043)
+
 
 # =====================================================================
 #  VIEW
