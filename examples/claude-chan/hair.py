@@ -270,7 +270,7 @@ cheeks to below the jaw, so the face shows as a soft narrow oval between them, a
     def cheek_lock(ref, sd, dx, x2, x3, x4, z4, w0, color, gap=0.045):
         p0 = dome(0.6, (1.12 + dx) * sd, 1.01)
         p1 = dome(1.22, (1.18 + 0.5 * dx) * sd, 1.045)
-        z2, z3 = ZE + 0.02, ZE - 0.3
+        z2, z3 = ZE + 0.02, ZE - 0.28
         p2 = (x2 * sd, fyf(x2 * sd, z2) - gap, z2)
         p3 = (x3 * sd, fyf(x3 * sd, z3) - gap, z3)
         p4 = (x4 * sd, -0.3, z4)
@@ -289,9 +289,10 @@ cheeks to below the jaw, so the face shows as a soft narrow oval between them, a
         blade(ref, pts, nr, [0.035, 0.9 * w0, w0, 0.85 * w0, 0.0], [0.008, 0.03, 0.028, 0.024, 0.0], color)
 
     for sd, tag in ((1, 'L'), (-1, 'R')):
-        cheek_lock(f'cheekLock{tag}1', sd, 0.0, 0.6, 0.53, 0.42, ZE - 0.82, 0.075, HAIR)
-        cheek_lock(f'cheekLock{tag}2', sd, -0.07, 0.56, 0.47, 0.33, ZE - 0.66, 0.05, HAIR_LT)
-        cheek_lock(f'cheekLock{tag}3', sd, 0.06, 0.595, 0.55, 0.48, ZE - 0.98, 0.06, HAIR_DK)
+        # on the sheet the hair covers the outer part of each cheek, leaving about +-0.42 of the face showing
+        cheek_lock(f'cheekLock{tag}1', sd, 0.0, 0.6, 0.47, 0.36, ZE - 0.82, 0.08, HAIR)
+        cheek_lock(f'cheekLock{tag}2', sd, -0.07, 0.575, 0.42, 0.3, ZE - 0.68, 0.05, HAIR_LT)
+        cheek_lock(f'cheekLock{tag}3', sd, 0.06, 0.615, 0.53, 0.44, ZE - 0.96, 0.065, HAIR_DK)
 
     # ---------- the braid crown ----------
     sc.blank()
