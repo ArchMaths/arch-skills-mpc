@@ -18,8 +18,9 @@ parametric surface precision* slider in Arch's settings for faster redraws while
 - **Head**: sculpted from parts. The face is a stack of horizontal arcs whose width, depth and
   roundness change with height, so it has a real profile: forehead, the dip between the eyes, a small
   pointed nose, lips, a receding chin, and a jawline that runs up to the ear. Seen from the front the
-  outline is a small chin under full, round cheeks; the round of each cheek, the brow and the eye
-  sockets are shallow bumps and hollows on top. Under the jaw, the neck, and ears with helix, fold,
+  outline is a soft chin under full, round cheeks; the round of each cheek, the brow and the eye
+  sockets are shallow bumps and hollows on top. Proportions are measured on the sheet's front-facing
+  face: the jaw follows its outline, and the irises are 0.93 times the eye-to-chin height apart. Under the jaw, the neck, and ears with helix, fold,
   concha, tragus and lobe.
 - **Face**: long, half-lidded eyes as on the sheet: a heavy, nearly level lash line that ends in a wing,
   a bowl-shaped lower lid, an amber iris that is shaded under the lid and golden below, pupil, two
@@ -37,6 +38,8 @@ parametric surface precision* slider in Arch's settings for faster redraws while
   corset with gold buttons, piping, chain, ring and tassel, a pleated cream skirt with orange
   embroidery, a frilled petticoat, a black overskirt lined in orange with gold-trimmed lapels, hip bows
   with chrysanthemums, chains and tassels, an orange back panel with a black bow, cream lace-up boots.
+- **Hands**: palm, two-jointed fingers and thumb, about half as wide as the cuffs they come out of,
+  as on the sheet.
 - **Props**: a leather book with gold corners, a chrysanthemum emblem and a ribbon bookmark; a display base.
 
 ## Rebuilding

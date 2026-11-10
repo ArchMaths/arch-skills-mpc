@@ -194,7 +194,8 @@ if want('earrings'):
         ellipsoid((top[0], top[1], top[2] - 0.1), (0.045, 0.045, 0.045), GOLD, f'earBead{tag}')
         tassel((top[0], top[1], top[2] - 0.15), 0.4, GOLD, f'earTassel{tag}', r=0.035)
 
-run('hair.py')
+if want('hair') or want('ornament'):
+    run('hair.py')
 
 if want('ornament'):
     sc.blank()

@@ -148,28 +148,32 @@ ARMS = {
 }
 
 
+HS = 2.0    # hand size: on the sheet a hand is about 0.4 of the head height and half as wide as the cuff
+
+
 def hand(W, d, pn, side, tag, curl=(0.35, 0.45), thumb_curl=0.5):
     d = unit(d)
     pn = unit(sub(pn, mul(d, dot(pn, d))))
     across = unit(cross(pn, d))  # toward the thumb for the left hand
     ts = 1 if side > 0 else -1
-    Pc = add(W, mul(d, 0.13))
-    ellipsoid(Pc, (0.068, 0.032, 0.088), SKIN, f'palm{tag}', fr=(across, pn, d))
+    Pc = add(W, mul(d, 0.13 * HS))
+    ellipsoid(Pc, (0.068 * HS, 0.032 * HS, 0.088 * HS), SKIN, f'palm{tag}', fr=(across, pn, d))
     offs = [0.046, 0.016, -0.015, -0.044]
     lens = [0.12, 0.14, 0.13, 0.105]
     for k, (o, ln) in enumerate(zip(offs, lens)):
-        base = add(add(Pc, mul(d, 0.07)), mul(across, -o * ts))
+        o, ln = o * HS, ln * HS
+        base = add(add(Pc, mul(d, 0.07 * HS)), mul(across, -o * ts))
         c1 = curl[0] + 0.05 * k
         d1 = unit(add(mul(d, math.cos(c1)), mul(pn, math.sin(c1))))
         m = add(base, mul(d1, ln * 0.55))
         c2 = c1 + curl[1]
         d2 = unit(add(mul(d, math.cos(c2)), mul(pn, math.sin(c2))))
         tip = add(m, mul(d2, ln * 0.45))
-        capsule(add(base, mul(d1, -0.01)), add(m, mul(d1, 0.012)), 0.02, 0.018, SKIN, f'finger{tag}{k + 1}a')
-        capsule(m, tip, 0.018, 0.015, SKIN, f'finger{tag}{k + 1}b')
-    tb = add(add(Pc, mul(across, 0.06 * ts)), add(mul(d, -0.03), mul(pn, 0.02)))
+        capsule(add(base, mul(d1, -0.01 * HS)), add(m, mul(d1, 0.012 * HS)), 0.02 * HS, 0.018 * HS, SKIN, f'finger{tag}{k + 1}a')
+        capsule(m, tip, 0.018 * HS, 0.015 * HS, SKIN, f'finger{tag}{k + 1}b')
+    tb = add(add(Pc, mul(across, 0.06 * ts * HS)), add(mul(d, -0.03 * HS), mul(pn, 0.02 * HS)))
     dt = unit(add(add(mul(d, 0.75), mul(pn, thumb_curl)), mul(across, 0.15 * ts)))
-    capsule(tb, add(tb, mul(dt, 0.11)), 0.022, 0.017, SKIN, f'thumb{tag}')
+    capsule(tb, add(tb, mul(dt, 0.11 * HS)), 0.022 * HS, 0.017 * HS, SKIN, f'thumb{tag}')
 
 
 if want('arms'):

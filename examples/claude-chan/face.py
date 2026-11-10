@@ -43,11 +43,11 @@ spline_fn('fpl', [R(-0.71, -0.44), R(-0.693, -0.478), R(-0.655, -0.515), R(-0.6,
                  R(-0.05, -0.583), R(0.03, -0.578), R(0.12, -0.592), R(0.22, -0.607), R(0.38, -0.613),
                  R(0.52, -0.596), R(0.66, -0.555), R(0.82, -0.48)])
 T_ = lambda t, w: (HC + t, w)
-spline_fn('fws', [T_(0, 0.03), T_(0.05, 0.098), T_(0.105, 0.167), T_(0.16, 0.253), T_(0.22, 0.338), T_(0.32, 0.462), T_(0.42, 0.556), T_(0.52, 0.614),
-                  T_(0.62, 0.645), T_(0.71, 0.651), T_(0.9, 0.655), T_(1.2, 0.645), T_(1.49, 0.56), T_(1.56, 0.525)])
-sc.func('fwd(h)', f"fws(h)*sqrt(max(0,h-{fmt(HC)})/(h-{fmt(HC - 0.025)}))")
+spline_fn('fws', [T_(0, 0.042), T_(0.05, 0.124), T_(0.105, 0.214), T_(0.16, 0.303), T_(0.22, 0.384), T_(0.32, 0.505), T_(0.42, 0.585), T_(0.52, 0.624),
+                  T_(0.62, 0.647), T_(0.71, 0.651), T_(0.9, 0.655), T_(1.2, 0.645), T_(1.49, 0.56), T_(1.56, 0.525)])
+sc.func('fwd(h)', f"fws(h)*sqrt(max(0,h-{fmt(HC)})/(h-{fmt(HC - 0.035)}))")
 sc.func('fd(h)', f"smn({fmt(Y0)}-fpl(h),1.18*fwd(h),0.08)")
-sc.func('fq(h)', f"0.3-0.11*exp(-((h-{fmt(ZE)})/0.14)^2)+0.15/(1+exp((h-{fmt(ZE - 0.3)})/0.07))")
+sc.func('fq(h)', f"0.3-0.11*exp(-((h-{fmt(ZE)})/0.14)^2)+0.07/(1+exp((h-{fmt(ZE - 0.3)})/0.07))")
 NT = ZE - 0.235     # height of the tip of the nose
 sc.func('fno(h)', f"0.066*exp(-(max(0,h-{fmt(NT)})/0.055)^1.5-(max(0,{fmt(NT)}-h)/0.03)^2)")
 sc.func('fr(p,h)',
@@ -59,8 +59,8 @@ sc.func('fr(p,h)',
         f"-0.006*exp(-((h-{fmt(ZE - 0.61)})/0.06)^2-(p/0.1)^2)"
         f"+0.02*exp(-((abs(p)-0.33)/0.17)^2-((h-{fmt(ZE + 0.02)})/0.1)^2)"
         f"-0.008*exp(-((abs(p)-0.3)/0.2)^2-((h-{fmt(ZE + 0.24)})/0.07)^2)"
-        f"-0.034*exp(-((abs(p)-0.3)/0.19)^2-((h-{fmt(ZE - 0.22)})/0.16)^2)"
-        f"-0.016*exp(-((abs(p)-0.26)/0.17)^2-((h-{fmt(ZE - 0.44)})/0.12)^2)")
+        f"-0.04*exp(-((abs(p)-0.3)/0.2)^2-((h-{fmt(ZE - 0.22)})/0.17)^2)"
+        f"-0.02*exp(-((abs(p)-0.26)/0.18)^2-((h-{fmt(ZE - 0.44)})/0.13)^2)")
 sc.func('fy(p,h)', 'fpl(h)+fd(h)*(1-max(0,1-(p/fwd(h))^2)^fq(h))+fr(p,h)')
 
 HN = ZE + 0.14      # the lower patches (nose, mouth, chin) end here
@@ -150,7 +150,7 @@ sc.blank()
 sc.note('Eyes')
 sc.comment("""Local polynomial fits of the face surface (qfit in the generator) for the eye and brow regions.
 Arch expands functions as text, so decals use these instead of the full fy.""")
-EX, EA = 0.355, 0.175         # centre of an eye and its half-width
+EX, EA = 0.336, 0.175         # centre of an eye and its half-width (iris spacing 0.93 x iris-to-chin, as on the sheet)
 EZ = ZE + 0.045               # height of the line through the corners of the eye
 def near_eye(x, z):
     """Where eye decals can be: between the lids (with room for the lash line and the fold above it)."""
@@ -158,10 +158,10 @@ def near_eye(x, z):
     return -1.15 < xi < 1.4 and EZ - 0.15 - 0.02 * xi < z < EZ + 0.1 and (xi < 1.0 or z > EZ - 0.05)
 
 
-qfit('qeL', 0.15, 0.6, EZ - 0.16, EZ + 0.1, deg=(8, 4), keep=near_eye)
-qfit('qeR', -0.6, -0.15, EZ - 0.16, EZ + 0.1, deg=(8, 4), keep=near_eye)
-qfit('qbL', 0.12, 0.59, EZ + 0.1, EZ + 0.26, deg=(7, 3))
-qfit('qbR', -0.59, -0.12, EZ + 0.1, EZ + 0.26, deg=(7, 3))
+qfit('qeL', EX - 0.205, EX + 0.245, EZ - 0.16, EZ + 0.1, deg=(8, 4), keep=near_eye)
+qfit('qeR', -EX - 0.245, -EX + 0.205, EZ - 0.16, EZ + 0.1, deg=(8, 4), keep=near_eye)
+qfit('qbL', EX - 0.235, EX + 0.235, EZ + 0.1, EZ + 0.26, deg=(7, 3))
+qfit('qbR', -EX - 0.235, -EX + 0.235, EZ + 0.1, EZ + 0.26, deg=(7, 3))
 
 sc.comment("""Her eyes are long and half-lidded: a heavy, nearly level upper lash line that ends in a wing, and a
 bowl-shaped lower lid. xi runs across an eye from the inner corner (-1) to the outer corner (+1);
@@ -225,7 +225,7 @@ def eye_layers(side, tag):
     fdec(f"{fmt(ex)}+{fmt(sg * EA)}*xb", f"{fmt(EZ + 0.19)}+0.014*(1-xb^2)-0.024*(xb+1)/2.3+q*0.016*(1-0.7*(xb+1)/2.3)*min(1,(xb+1.1)/0.15)^0.5*min(1,(1.25-xb)/0.3)^0.8",
          0.004, ('xb', -1.1, 1.25), ('q', 0, 1), '#a45f38', f'brow{tag}', q='qbL' if side > 0 else 'qbR')
     for k, (sx, sz, col) in enumerate(((0.13, 0.055, '#e4b8ae'), (0.095, 0.04, '#e4b1a8'), (0.06, 0.025, '#e5aaa2'))):
-        fdec(f"{fmt(0.37 * side)}+{fmt(sx)}*r*cos(w)", f"{fmt(ZE - 0.21)}+{fmt(sz)}*r*sin(w)", 0.0015 + 0.0008 * k, ('r', 0, 1), ('w', 0, '2*pi'), col, f'blush{tag}{k + 1}')
+        fdec(f"{fmt(0.355 * side)}+{fmt(sx)}*r*cos(w)", f"{fmt(ZE - 0.21)}+{fmt(sz)}*r*sin(w)", 0.0015 + 0.0008 * k, ('r', 0, 1), ('w', 0, '2*pi'), col, f'blush{tag}{k + 1}')
 
 
 for side, tag in ((1, 'L'), (-1, 'R')):
