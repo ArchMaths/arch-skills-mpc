@@ -26,13 +26,13 @@ PARTS = set(args.parts.split(','))
 def want(p): return 'all' in PARTS or p in PARTS
 
 # ---------------- palette ----------------
-SKIN = '#e6c2b8'
-SKIN_SH = '#d3a79c'
-HAIR_HI = '#f2a76a'
-HAIR = '#d86a2c'
-HAIR_DK = '#c35d25'
-HAIR_LT = '#e07736'
-HAIR_SH = '#a3481b'
+SKIN = '#e5d0cd'        # cool porcelain, as on the sheet
+SKIN_SH = '#d2b6b2'
+HAIR_HI = '#eda077'     # muted coral hair, sampled from the sheet
+HAIR = '#c4623c'
+HAIR_DK = '#ac5232'
+HAIR_LT = '#d4744a'
+HAIR_SH = '#8c3e24'
 CREAM = '#f3e9d8'
 CREAM_DK = '#e3d3bb'
 BLACK = '#1f1b22'
@@ -85,8 +85,17 @@ def ellipsoid(C, R, color, ref, fr=None, orient='closed', urange=(0, 'pi'), opac
 # =====================================================================
 #  HEAD AND FACE
 # =====================================================================
+# Her head is tilted toward her right shoulder and turned a little to her right, as on the sheet. The
+# head, bangs, braid and ornament turn rigidly about the top of the neck; long locks turn with the head
+# where they lie on it and hang straight below (see hair.py).
+_ry = lambda a: [[math.cos(a), 0, math.sin(a)], [0, 1, 0], [-math.sin(a), 0, math.cos(a)]]
+_rz = lambda a: [[math.cos(a), -math.sin(a), 0], [math.sin(a), math.cos(a), 0], [0, 0, 1]]
+_R = [[sum(_rz(math.radians(-4))[i][m] * _ry(math.radians(-6))[m][j] for m in range(3)) for j in range(3)] for i in range(3)]
+_ax, _ang = axis_angle(_R)
+HEAD_TURN = dict(pivot=(0, 0.12, 11.3), axis=_ax, angle=_ang)
 if want('head') or want('hair') or want('ornament') or want('earrings'):
-    run('face.py')        # the hair and accessories are placed on the head, so they need it too
+    with sc.turned(**HEAD_TURN):
+        run('face.py')        # the hair and accessories are placed on the head, so they need it too
 
 # =====================================================================
 #  HAIR ORNAMENT (her left side): chrysanthemum on a black bow, ribbons, gold tassel
@@ -188,7 +197,7 @@ if want('earrings'):
     sc.blank()
     sc.note('Gold tassel earrings')
     for side, tag in ((1, 'L'), (-1, 'R')):
-        lobe = EAR_LOBES[tag]
+        lobe = sc.turn_point(EAR_LOBES[tag], (HEAD_TURN['pivot'], HEAD_TURN['axis'], HEAD_TURN['angle'], None))
         top = (lobe[0] + 0.01 * side, lobe[1], lobe[2] - 0.04)
         torus(add(top, (0, 0, -0.03)), ((0, 1, 0), (0, 0, 1), (1, 0, 0)), 0.03, 0.007, GOLD, f'earHoop{tag}')
         ellipsoid((top[0], top[1], top[2] - 0.1), (0.045, 0.045, 0.045), GOLD, f'earBead{tag}')
@@ -201,19 +210,20 @@ if want('ornament'):
     sc.blank()
     sc.note('Hair ornament: chrysanthemum on a black bow, cream ribbons, gold tassel')
     C, nrm = ORN_P, ORN_N
-    fr = frame(nrm, (0, 0, 1))
-    # bow behind the flower: loops up-back and down-front, gold rims
-    bow_axis = unit(add(mul(fr[1], 1.0), mul(fr[0], 0.35)))
-    bfr = frame_ab(bow_axis, nrm)
-    bow(add(C, mul(nrm, -0.07)), bfr, (0.42, 0.17, 0.06), 'hairBow')
-    # ribbon tails hanging from under the flower
-    base = add(C, (0.03, 0.0, -0.15))
-    face = unit((1, -0.35, 0))
-    ribbon([base, add(base, (0.1, -0.04, -0.42)), add(base, (0.09, -0.1, -0.92))], 0.06, CREAM, 'hairRibbon1', face, rim=GOLD)
-    ribbon([add(base, (0.02, 0.08, 0)), add(base, (0.13, 0.1, -0.38)), add(base, (0.15, 0.15, -0.76))], 0.068, BLACK, 'hairRibbon2', face, rim=GOLD)
-    flower(C, nrm, 0.29, 'hairFlower')
-    tassel(add(C, (0.05, -0.07, -0.19)), 0.64, GOLD, 'hairTassel', r=0.043)
-
+    with sc.turned(**HEAD_TURN):
+        fr = frame(nrm, (0, 0, 1))
+        # bow behind the flower: loops up-back and down-front, gold rims
+        bow_axis = unit(add(mul(fr[1], 1.0), mul(fr[0], 0.35)))
+        bfr = frame_ab(bow_axis, nrm)
+        bow(add(C, mul(nrm, -0.07)), bfr, (0.42, 0.17, 0.06), 'hairBow')
+        # ribbon tails hanging from under the flower
+        base = add(C, (0.03, 0.0, -0.15))
+        face = unit((1, -0.35, 0))
+        ribbon([base, add(base, (0.1, -0.04, -0.42)), add(base, (0.09, -0.1, -0.92))], 0.06, CREAM, 'hairRibbon1', face, rim=GOLD)
+        ribbon([add(base, (0.02, 0.08, 0)), add(base, (0.13, 0.1, -0.38)), add(base, (0.15, 0.15, -0.76))], 0.068, BLACK, 'hairRibbon2', face, rim=GOLD)
+        flower(C, nrm, 0.29, 'hairFlower')
+        tassel_top = sc.turn_point(add(C, (0.05, -0.07, -0.19)))
+    tassel(tassel_top, 0.64, GOLD, 'hairTassel', r=0.043)     # the tassel hangs straight down
 
 # =====================================================================
 #  VIEW

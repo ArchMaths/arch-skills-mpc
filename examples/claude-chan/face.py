@@ -49,9 +49,9 @@ sc.func('fwd(h)', f"fws(h)*sqrt(max(0,h-{fmt(HC)})/(h-{fmt(HC - 0.035)}))")
 sc.func('fd(h)', f"smn({fmt(Y0)}-fpl(h),1.18*fwd(h),0.08)")
 sc.func('fq(h)', f"0.3-0.11*exp(-((h-{fmt(ZE)})/0.14)^2)+0.07/(1+exp((h-{fmt(ZE - 0.3)})/0.07))")
 NT = ZE - 0.235     # height of the tip of the nose
-sc.func('fno(h)', f"0.066*exp(-(max(0,h-{fmt(NT)})/0.055)^1.5-(max(0,{fmt(NT)}-h)/0.03)^2)")
+sc.func('fno(h)', f"0.036*exp(-(max(0,h-{fmt(NT)})/0.07)^1.5-(max(0,{fmt(NT)}-h)/0.035)^2)")
 sc.func('fr(p,h)',
-        f"-fno(h)*exp(-(p/(0.024+0.022*exp(-((h-{fmt(NT - 0.01)})/0.05)^2)))^2)"
+        f"-fno(h)*exp(-(p/(0.034+0.024*exp(-((h-{fmt(NT - 0.01)})/0.05)^2)))^2)"
         f"-0.008*exp(-((h-{fmt(NT - 0.015)})/0.06)^2-(p/0.1)^2)"
         f"-0.008*exp(-((h-{fmt(ZE - 0.39)})/0.03)^2-(p/0.085)^2)"
         f"+0.006*exp(-((h-{fmt(ZE - 0.425)})/0.012)^2-(p/0.08)^2)"
@@ -83,7 +83,8 @@ sc.comment("Cranium (under the hair) and neck.")
 CR_C, CR_R = (0, 0.14, ZE + 0.42), (0.655, 0.745, 0.755)
 ellipsoid(CR_C, CR_R, SKIN, 'cranium')
 sc.surface(('fwd(h)*cos(g)', f"{fmt(Y0)}+0.3*sin(g)", 'h'), ('h', ZE - 0.3, ZE + 0.5), ('g', 0, 'pi'), SKIN, 'headSide', ('point', (0, 0.2, ZE)))
-capsule((0, 0.04, 10.2), (0, -0.05, 11.52), 0.2, 0.205, SKIN_SH, 'neck')
+with sc.unturned():       # the neck stays with the body; the head turns on top of it
+    capsule((0, 0.04, 10.2), (0, -0.05, 11.52), 0.2, 0.205, SKIN_SH, 'neck')
 
 
 EAR_LOBES = {}
@@ -172,16 +173,16 @@ below), pupil, highlights, then the lash line, lashes, lower lid line, the fold 
 sc.func('eu(xi)', '0.024*(1-min(1,abs(xi))^2.5)^0.6+0.006*xi')
 sc.func('el(xi)', '-0.126*(1-min(1,xi^2))^0.62*(1+0.12*xi)+0.006*xi')
 sc.func('lw(xi)', 'eu(min(xi,1))+0.04*(max(0,xi-1)/0.32)^1.5')
-sc.func('lv(xi)', 'eu(min(xi,1))+(0.012+0.022*min(1,max(0,xi+0.9)/0.9)+0.014*min(1,max(0,xi-0.5)/0.5))*min(1,(xi+1)/0.12)^0.5-0.004*max(0,xi-1)/0.32')
-LASH = '#2b1811'
+sc.func('lv(xi)', 'eu(min(xi,1))+(0.008+0.014*min(1,max(0,xi+0.9)/0.9)+0.01*min(1,max(0,xi-0.5)/0.5))*min(1,(xi+1)/0.12)^0.5-0.003*max(0,xi-1)/0.32')
+LASH = '#33190f'
 
 
 def eye_layers(side, tag):
     ex, sg = EX * side, side
     QE = 'qeL' if side > 0 else 'qeR'
     XI = f"{fmt(ex)}+{fmt(sg * EA)}*xi"
-    fdec(XI, f"{fmt(EZ)}+el(xi)+eta*(eu(xi)-el(xi))", 0.003, ('xi', -1, 1), ('eta', 0, 1), '#ece7e9', f'eyeWhite{tag}', q=QE)
-    fdec(XI, f"{fmt(EZ)}+eu(xi)-eta*(0.03+0.022*xi^2)*(1-xi^2)^0.3", 0.004, ('xi', -1, 1), ('eta', 0, 1), '#c7bec8', f'lidShadow{tag}', q=QE)
+    fdec(XI, f"{fmt(EZ)}+el(xi)+eta*(eu(xi)-el(xi))", 0.003, ('xi', -1, 1), ('eta', 0, 1), '#efe9ea', f'eyeWhite{tag}', q=QE)
+    fdec(XI, f"{fmt(EZ)}+eu(xi)-eta*(0.03+0.022*xi^2)*(1-xi^2)^0.3", 0.004, ('xi', -1, 1), ('eta', 0, 1), '#d5c8cb', f'lidShadow{tag}', q=QE)
     idx = -0.006                                  # the iris sits slightly toward the nose
     icx, icz, rx, rz = ex + sg * idx, EZ - 0.045, 0.094, 0.106
     xa, xb = (idx - rx) / EA, (idx + rx) / EA
@@ -197,21 +198,21 @@ def eye_layers(side, tag):
     def polar(cx, cz, ax, az, d, color, ref, rad='r', ww=(0, '2*pi')):
         fdec(f"{fmt(cx)}+{fmt(ax)}*{rad}*cos(w)", f"{fmt(cz)}+{fmt(az)}*{rad}*sin(w)", d, ('r', 0, 1), ('w', ww[0], ww[1]), color, ref, q=QE)
 
-    band(-1, 1, 1.0, 0.0055, '#4a2212', f'irisRim{tag}')
-    band(-1, 1, 0.91, 0.0065, '#c9772c', f'iris{tag}')
-    band(-0.9, -0.25, 0.84, 0.0072, '#dc9238', f'irisGlow{tag}')
-    band(-0.86, -0.48, 0.72, 0.0079, '#f0b858', f'irisGold{tag}')
-    band(0.2, 1, 0.91, 0.0072, '#955020', f'irisShade{tag}')
-    band(0.48, 1, 0.91, 0.0079, '#6f3618', f'irisTop{tag}')
+    band(-1, 1, 1.0, 0.0055, '#7a4430', f'irisRim{tag}')
+    band(-1, 1, 0.92, 0.0065, '#cf9467', f'iris{tag}')
+    band(-0.9, -0.2, 0.86, 0.0072, '#e2b07e', f'irisGlow{tag}')
+    band(-0.86, -0.46, 0.74, 0.0079, '#eec79a', f'irisGold{tag}')
+    band(0.2, 1, 0.92, 0.0072, '#a96a46', f'irisShade{tag}')
+    band(0.5, 1, 0.92, 0.0079, '#7c4530', f'irisTop{tag}')
     for k in range(5):
         th = -math.pi / 2 + (k - 2) * 0.4
         c, s_ = math.cos(th), math.sin(th)
         fdec(f"{fmt(icx)}+{fmt(rx * c)}*rho-{fmt(s_)}*0.0045*q*(1.1-rho)", f"{fmt(icz)}+{fmt(rz * s_)}*rho+{fmt(c)}*0.0045*q*(1.1-rho)",
-             0.0086, ('rho', 0.44, 0.62), ('q', -1, 1), '#f8d48a', f'irisStreak{tag}{k + 1}', q=QE)
-    polar(icx, icz + 0.006, 0.04, 0.05, 0.0095, '#5a2a12', f'pupilHalo{tag}')
-    polar(icx, icz + 0.006, 0.031, 0.04, 0.0105, '#2e140a', f'pupil{tag}')
-    polar(icx - 0.034, icz + 0.042, 0.021, 0.024, 0.0125, 'white', f'shine{tag}')
-    polar(icx + 0.04, icz - 0.05, 0.011, 0.011, 0.0125, '#fff4de', f'shineDot{tag}')
+             0.0086, ('rho', 0.44, 0.62), ('q', -1, 1), '#f1d3ae', f'irisStreak{tag}{k + 1}', q=QE)
+    polar(icx, icz + 0.008, 0.032, 0.041, 0.0095, '#8a5034', f'pupilHalo{tag}')
+    polar(icx, icz + 0.008, 0.022, 0.03, 0.0105, '#4d2318', f'pupil{tag}')
+    polar(icx - 0.032, icz + 0.04, 0.016, 0.018, 0.0125, '#fffaf6', f'shine{tag}')
+    polar(icx + 0.038, icz - 0.05, 0.008, 0.008, 0.0125, '#fff1e2', f'shineDot{tag}')
     # upper lash line with its wing, small lashes at the outer corner
     fdec(XI, f"{fmt(EZ)}+lw(xi)-0.004*min(1,max(0,1-xi)/0.1)+q*(lv(xi)-lw(xi)+0.004*min(1,max(0,1-xi)/0.1))", 0.014, ('xi', -1, 1.32), ('q', 0, 1), LASH, f'lash{tag}', q=QE)
     for k, (x0, x1, tipx, tipz) in enumerate(((0.8, 0.95, 1.12, -0.034), (0.98, 1.1, 1.3, -0.008))):
@@ -219,12 +220,14 @@ def eye_layers(side, tag):
         Xs = f"{fmt(ex)}+{fmt(sg * EA)}*({xb_}*(1-hh)+{fmt(tipx)}*hh)"
         Zs = f"{fmt(EZ)}+(lw({xb_})+0.004)*(1-hh)+{fmt(tipz)}*hh"
         fdec(Xs, Zs, 0.013, ('q', 0, 1), ('hh', 0, 1), LASH, f'lashTip{tag}{k + 1}', q=QE)
-    fdec(XI, f"{fmt(EZ)}+el(min(xi,1))+0.002-q*(0.004+0.008*min(1,max(0,xi-0.2)/0.6))", 0.013, ('xi', 0.2, 1), ('q', 0, 1), '#5b3020', f'lashLow{tag}', q=QE)
-    fdec(XI, f"{fmt(EZ)}+el(xi)+0.001-q*0.004", 0.012, ('xi', -0.45, 0.2), ('q', 0, 1), '#a56f5e', f'lidLow{tag}', q=QE)
-    fdec(XI, f"{fmt(EZ)}+lv(xi)+0.017+0.005*(1-xi^2)+q*0.005*(1-((xi-0.05)/0.85)^2)^0.5", 0.004, ('xi', -0.8, 0.9), ('q', 0, 1), '#bd8876', f'crease{tag}', q=QE)
+    fdec(XI, f"{fmt(EZ)}+el(min(xi,1))+0.002-q*(0.004+0.008*min(1,max(0,xi-0.2)/0.6))", 0.013, ('xi', 0.2, 1), ('q', 0, 1), '#875244', f'lashLow{tag}', q=QE)
+    fdec(XI, f"{fmt(EZ)}+el(xi)+0.001-q*0.004", 0.012, ('xi', -0.45, 0.2), ('q', 0, 1), '#c39a8f', f'lidLow{tag}', q=QE)
+    # a soft pink-brown tint on the lid just above the lash line
+    fdec(XI, f"{fmt(EZ)}+lv(xi)-0.002+q*0.015*(1-min(1,((xi-0.1)/0.95)^2))^0.6", 0.0035, ('xi', -0.85, 1.05), ('q', 0, 1), '#dcc1bc', f'lidTint{tag}', q=QE)
+    fdec(XI, f"{fmt(EZ)}+lv(xi)+0.017+0.005*(1-xi^2)+q*0.005*(1-((xi-0.05)/0.85)^2)^0.5", 0.004, ('xi', -0.8, 0.9), ('q', 0, 1), '#c8a196', f'crease{tag}', q=QE)
     fdec(f"{fmt(ex)}+{fmt(sg * EA)}*xb", f"{fmt(EZ + 0.19)}+0.014*(1-xb^2)-0.024*(xb+1)/2.3+q*0.016*(1-0.7*(xb+1)/2.3)*min(1,(xb+1.1)/0.15)^0.5*min(1,(1.25-xb)/0.3)^0.8",
-         0.004, ('xb', -1.1, 1.25), ('q', 0, 1), '#a45f38', f'brow{tag}', q='qbL' if side > 0 else 'qbR')
-    for k, (sx, sz, col) in enumerate(((0.13, 0.055, '#e4b8ae'), (0.095, 0.04, '#e4b1a8'), (0.06, 0.025, '#e5aaa2'))):
+         0.004, ('xb', -1.1, 1.25), ('q', 0, 1), '#a9654a', f'brow{tag}', q='qbL' if side > 0 else 'qbR')
+    for k, (sx, sz, col) in enumerate(((0.12, 0.05, '#e5c7c2'), (0.085, 0.035, '#e6bfba'), (0.05, 0.021, '#e7b8b3'))):
         fdec(f"{fmt(0.355 * side)}+{fmt(sx)}*r*cos(w)", f"{fmt(ZE - 0.21)}+{fmt(sz)}*r*sin(w)", 0.0015 + 0.0008 * k, ('r', 0, 1), ('w', 0, '2*pi'), col, f'blush{tag}{k + 1}')
 
 
@@ -233,7 +236,8 @@ for side, tag in ((1, 'L'), (-1, 'R')):
 
 sc.blank()
 sc.note('Nose and mouth')
-sc.comment("The small shadow under the tip of the nose, and a calm closed smile.")
-fdec('-0.012+0.03*q', f"{fmt(NT - 0.035)}-0.008*(1-(2*q-1)^2)+hh*0.006*(1-(2*q-1)^2)^0.5", 0.002, ('q', 0, 1), ('hh', 0, 1), '#c48e83', 'noseShadow')
+sc.comment("A soft shadow beside the tip of the nose and a highlight above it, as on the sheet, and a calm closed smile.")
+fdec('-0.024+0.026*r*cos(w)', f"{fmt(NT - 0.028)}+0.009*r*sin(w)", 0.0015, ('r', 0, 1), ('w', 0, '2*pi'), '#d9bdb7', 'noseShadow')
+fdec('0.004+0.009*r*cos(w)', f"{fmt(NT + 0.035)}+0.03*r*sin(w)", 0.0015, ('r', 0, 1), ('w', 0, '2*pi'), '#f7ecea', 'noseShine')
 MZ = ZE - 0.425
-fdec('p', f"{fmt(MZ)}+0.014*(p/0.072)^2-0.002*exp(-(p/0.015)^2)+q*0.0075*(1-(p/0.074)^2)^0.6", 0.003, ('p', -0.074, 0.074), ('q', -0.5, 0.5), '#a9615a', 'smile')
+fdec('p', f"{fmt(MZ)}+0.014*(p/0.072)^2-0.002*exp(-(p/0.015)^2)+q*0.0075*(1-(p/0.074)^2)^0.6", 0.003, ('p', -0.07, 0.07), ('q', -0.4, 0.4), '#b97a72', 'smile')

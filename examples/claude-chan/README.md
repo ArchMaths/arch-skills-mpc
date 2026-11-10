@@ -15,22 +15,26 @@ parametric surface precision* slider in Arch's settings for faster redraws while
 
 ## What is modelled
 
-- **Head**: sculpted from parts. The face is a stack of horizontal arcs whose width, depth and
+- **Head**: sculpted from parts, tilted toward her right shoulder and turned a little to her right as on
+  the sheet. The face is a stack of horizontal arcs whose width, depth and
   roundness change with height, so it has a real profile: forehead, the dip between the eyes, a small
   pointed nose, lips, a receding chin, and a jawline that runs up to the ear. Seen from the front the
   outline is a soft chin under full, round cheeks; the round of each cheek, the brow and the eye
   sockets are shallow bumps and hollows on top. Proportions are measured on the sheet's front-facing
   face: the jaw follows its outline, and the irises are 0.93 times the eye-to-chin height apart. Under the jaw, the neck, and ears with helix, fold,
   concha, tragus and lobe.
-- **Face**: long, half-lidded eyes as on the sheet: a heavy, nearly level lash line that ends in a wing,
-  a bowl-shaped lower lid, an amber iris that is shaded under the lid and golden below, pupil, two
-  highlights, the fold of the lid, lower lash line, and thin brows that slope gently outward. A small
-  shadow under the tip of the nose, a calm closed smile, a faint blush.
+- **Face**: long, half-lidded eyes as on the sheet: a thin, nearly level lash line that ends in a wing,
+  a bowl-shaped lower lid, a soft honey iris that is shaded under the lid and light below, a small pupil,
+  two small highlights, a pink-brown tint on the lid, its fold, lower lash line, and thin brows that
+  slope gently outward. A low nose with a highlight above its tip and a soft shadow beside it, a calm
+  closed smile, a faint blush. Skin, iris and hair colours are sampled from the sheet.
 - **Hair**: every lock starts at the crown, lies on the head, and falls from there, so the top of the
   hair and the long hair are the same surfaces. Down the back the locks fall straight in three layers;
   at the sides they fan out over the shoulders and arms; in front of the ears thinner locks fall over
-  the chest. Locks wave more toward their ends and finish in a curled tip. Side-swept bangs with a tuft
-  between the eyes, locks framing the face, and a three-strand braid crown around the back of the head.
+  the chest. Locks wave more toward their ends and finish in a curled tip. Side-swept bangs with a lock
+  between the eyes and thin wisps across the eyes; locks that fall from the temples in front of the
+  cheeks to below the jaw, so the face shows as a soft oval between them; a three-strand braid crown
+  around the back of the head.
 - **Accessories**: a chrysanthemum on a black bow with cream ribbons and a gold tassel above her left
   ear; gold tassel earrings.
 - **Outfit**: high ruffled collar and jabot, black ascot with a chrysanthemum brooch, cream capelet with
@@ -73,6 +77,11 @@ node src/cli.js examples/claude-chan/claude-chan-3d.arch -o examples/claude-chan
   margin). Each lock has its own angle, drift, wave, layer, width and length. Its tip turns through
   three quarters of a circle with the cross-section turning along, either sideways (a hook) or outward
   (a scroll), and is a separate surface so the curl gets a fine mesh.
+- **Head turn.** The generator draws the head's parts inside a turned block: each coordinate is
+  replaced by a fixed combination of all three (a rotation about the top of the neck). The long locks
+  use the same rotation with an angle that eases from the head's to zero down the lock, hb(t), so they
+  turn with the head where they lie on it and hang straight below. Earrings and tassels hang straight
+  from their turned attachment points.
 - **Braid.** Three strands follow an oval ring on the dome and weave as `sin(tau)` across the ring and
   `sin(2 tau)` in height, a third of a turn apart.
 - Arch lights a surface at half strength where its normal faces away from the camera, so the generator

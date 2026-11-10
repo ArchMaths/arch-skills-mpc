@@ -5,6 +5,7 @@ formula in Python, so it can flip surfaces whose normals point inward (Arch ligh
 normal faces away from the camera at half strength) and report bounding boxes.
 """
 import math, re
+from contextlib import contextmanager
 
 PI = math.pi
 
@@ -85,6 +86,21 @@ def bezier_eval(points, s):
     return tuple(out)
 
 
+def rot_parts(axis):
+    """K and K^2 for a rotation about the unit axis: R(a) = I + sin(a) K + (1 - cos(a)) K^2."""
+    k = unit(axis)
+    K = [[0, -k[2], k[1]], [k[2], 0, -k[0]], [-k[1], k[0], 0]]
+    K2 = [[sum(K[i][m] * K[m][j] for m in range(3)) for j in range(3)] for i in range(3)]
+    return K, K2
+
+
+def axis_angle(R):
+    """Axis and angle of a rotation matrix."""
+    ang = math.acos(max(-1.0, min(1.0, (R[0][0] + R[1][1] + R[2][2] - 1) / 2)))
+    ax = (R[2][1] - R[1][2], R[0][2] - R[2][0], R[1][0] - R[0][1])
+    return unit(ax), ang
+
+
 # ---------- Python evaluation of Arch expressions ----------
 def _pow(a, b):
     if a < 0 and abs(b - round(b)) > 1e-10:
@@ -103,6 +119,7 @@ class Scene:
         self.flipped = []
         self.report = []
         self.names = set()
+        self.turn = None          # (pivot, axis, angle, blend) while drawing inside a turned() block
 
     # Arch '^' -> Python; '^' binds tighter than unary minus in both.
     def py(self, expr):
@@ -144,10 +161,71 @@ class Scene:
                 return None
         return g
 
+    # ---------- turning a group of parts (her head) ----------
+    @contextmanager
+    def turned(self, pivot, axis, angle, blend=None):
+        """Surfaces and curves drawn inside are turned by angle about axis through pivot. blend=None turns
+        them rigidly; blend=(S, C) gives Arch expressions in the surface parameters for sin and 1-cos of
+        a varying angle, so a part can turn with the head at one end and not at all at the other."""
+        prev, self.turn = self.turn, (pivot, axis, angle, blend)
+        try:
+            yield
+        finally:
+            self.turn = prev
+
+    @contextmanager
+    def unturned(self):
+        prev, self.turn = self.turn, None
+        try:
+            yield
+        finally:
+            self.turn = prev
+
+    def turn_point(self, P, turn=None):
+        """Where a point of a turned group ends up (rigid turn)."""
+        turn = turn or self.turn
+        if turn is None:
+            return P
+        p, axis, ang, _ = turn
+        K, K2 = rot_parts(axis)
+        s, c = math.sin(ang), 1 - math.cos(ang)
+        d = sub(P, p)
+        return tuple(p[i] + d[i] + sum((s * K[i][j] + c * K2[i][j]) * d[j] for j in range(3)) for i in range(3))
+
+    def _turn(self, XYZ):
+        p, axis, ang, blend = self.turn
+        K, K2 = rot_parts(axis)
+        V = XYZ
+        out = []
+        for i in range(3):
+            if blend is None:
+                s, c = math.sin(ang), 1 - math.cos(ang)
+                M = [(1 if i == j else 0) + s * K[i][j] + c * K2[i][j] for j in range(3)]
+                const = p[i] - sum(M[j] * p[j] for j in range(3))
+                terms = [f"{fmt(M[j])}*({V[j]})" for j in range(3) if abs(M[j]) > 1e-9]
+                out.append('+'.join(terms) + f"+{fmt(const)}")
+            else:
+                S, C = blend
+                terms = []
+                for j in range(3):
+                    parts = ['1'] if i == j else []
+                    if abs(K[i][j]) > 1e-9:
+                        parts.append(f"{fmt(K[i][j])}*{S}")
+                    if abs(K2[i][j]) > 1e-9:
+                        parts.append(f"{fmt(K2[i][j])}*{C}")
+                    if parts:
+                        terms.append(f"({'+'.join(parts)})*({V[j]})")
+                a = sum(K[i][j] * p[j] for j in range(3))
+                b = sum(K2[i][j] * p[j] for j in range(3))
+                out.append('+'.join(terms) + f"-{fmt(a)}*{S}-{fmt(b)}*{C}")
+        return tuple(out)
+
     def surface(self, XYZ, U, V, color, ref=None, orient='closed', opacity=None, hidden=False):
         """XYZ: three Arch expressions; U, V: (name, lo, hi); orient: how to decide the outside.
         'closed' outward from the centroid, ('point', p) away from p, ('dir', d) toward d,
         ('tube', 'u'|'v') away from the axis of rings at fixed u (or v), None = keep."""
+        if self.turn:
+            XYZ = self._turn(XYZ)
         X, Y, Z = XYZ
         u, u0, u1 = U
         v, v0, v1 = V
@@ -209,6 +287,8 @@ class Scene:
         self.count += 1
 
     def curve(self, XYZ, T, color, ref=None, thickness=2):
+        if self.turn:
+            XYZ = self._turn(XYZ)
         X, Y, Z = XYZ
         t, t0, t1 = T
         opts = [f"color={color}", f"thickness={thickness}"]

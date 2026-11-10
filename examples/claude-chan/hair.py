@@ -5,6 +5,7 @@ ZHC = ZE + 0.42                          # height of the centre of the cranium
 HDX, HDY, HDZ = 0.725, 0.815, 0.825      # the dome of the hair around the cranium
 HY0 = 0.14
 ZBOT = 5.3                               # where the longest locks end
+TB = 0.09                                # how far down a lock eases from turning with the head to hanging straight
 T0 = 1 / (1 + (ZHC - ZBOT) / (HDZ * math.pi / 2))   # part of a lock's length that lies on the dome
 VF = HDZ * math.pi / 2 / T0              # how fast z falls with t below the dome
 
@@ -120,6 +121,12 @@ down the fall. hdw keeps a lock's width steady as the hair spreads.""")
     sc.func('hrx(t)', f"{fmt(HDX)}*sin(ha(t)){gx}")
     sc.func('hry(t)', f"{fmt(HDY)}*sin(ha(t)){gy}")
     sc.func('hdw(t)', 'min(1,1.54/(hrx(t)+hry(t)))')
+    sc.comment(f"""Her head is tilted and turned (see the generator); a lock turns with it where it lies on the head and
+hangs straight below. hb(t) is 1 on the head and eases to 0 by t = {fmt(T0 + TB)}; hs and hk are the sine and
+one minus the cosine of the head's turn times hb.""")
+    sc.func('hb(t)', f"1-min(1,max(0,(t-{fmt(T0)})/{fmt(TB)}))^2*(3-2*min(1,max(0,(t-{fmt(T0)})/{fmt(TB)})))")
+    sc.func('hs(t)', f"sin({fmt(HEAD_TURN['angle'])}*hb(t))")
+    sc.func('hk(t)', f"1-cos({fmt(HEAD_TURN['angle'])}*hb(t))")
     sc.comment("""A lock is a tube around its own flow line. lpc is the angle of that line around the head: a starting
 angle pb+p0 (0 = straight back, + toward her left) whose part p0 closes up by sg as the hair spreads (sg = 1
 falls straight down, sg = 0 fans out over the shoulders; pb is 0 for the back and pi for the front), a drift dr, and a wave of size am that grows down the
@@ -143,8 +150,9 @@ quarters of a circle: sideways like a hook, or outward like a scroll.""")
         WD = f"lwd(t,{fmt(te)},{fmt(hw)})"
         TH = f"lth(t,w,{fmt(te)},{fmt(th)})"
         end = te if curl is None else te - 0.08
-        sc.surface((f"(hrx(t)+({RC}+{TH})*sin(ha(t)))*sin({PC}+{WD}*cos(w))", f"{fmt(HY0)}+(hry(t)+({RC}+{TH})*sin(ha(t)))*cos({PC}+{WD}*cos(w))",
-                    f"hzz(t)+({RC}+{TH})*cos(ha(t))"), ('t', start, end), ('w', 0, '2*pi'), col, ref, ('tube', 'u'))
+        with sc.turned(**HEAD_TURN, blend=('hs(t)', 'hk(t)')):
+            sc.surface((f"(hrx(t)+({RC}+{TH})*sin(ha(t)))*sin({PC}+{WD}*cos(w))", f"{fmt(HY0)}+(hry(t)+({RC}+{TH})*sin(ha(t)))*cos({PC}+{WD}*cos(w))",
+                        f"hzz(t)+({RC}+{TH})*cos(ha(t))"), ('t', start, end), ('w', 0, '2*pi'), col, ref, ('tube', 'u'))
         if curl is None:
             return
         AL = f"(4.712*lq(t,{fmt(te)}))"
@@ -162,10 +170,12 @@ quarters of a circle: sideways like a hook, or outward like a scroll.""")
         sc.surface(xyz, ('t', te - 0.08, te), ('w', 0, '2*pi'), col, ref + 'Curl', ('tube', 'u'))
 
     sc.comment("A dark cap and an inner sheet under the locks, so no gap shows skin.")
-    sc.surface((f"{fmt(HDX * 0.98)}*sin(u)*cos(v)", f"{fmt(HY0)}+{fmt(HDY * 0.98)}*sin(u)*sin(v)", f"{fmt(ZHC)}+{fmt(HDZ * 0.98)}*cos(u)"),
+    with sc.turned(**HEAD_TURN):
+        sc.surface((f"{fmt(HDX * 0.98)}*sin(u)*cos(v)", f"{fmt(HY0)}+{fmt(HDY * 0.98)}*sin(u)*sin(v)", f"{fmt(ZHC)}+{fmt(HDZ * 0.98)}*cos(u)"),
                ('u', 0, 1.75), ('v', 0, '2*pi'), HAIR_DK, 'hairCap', ('point', (0, HY0, ZHC)))
-    sc.surface(("(hrx(t)-0.03)*sin(k*(1-0.64*(1-hdw(t))))", f"{fmt(HY0)}+(hry(t)-0.03)*cos(k*(1-0.64*(1-hdw(t))))", "hzz(t)"),
-               ('t', T0 * 0.9, 0.7), ('k', -1.2, 1.2), HAIR_SH, 'hairUnder', ('point', (0, 0, 9)))
+    with sc.turned(**HEAD_TURN, blend=('hs(t)', 'hk(t)')):
+        sc.surface(("(hrx(t)-0.03)*sin(k*(1-0.64*(1-hdw(t))))", f"{fmt(HY0)}+(hry(t)-0.03)*cos(k*(1-0.64*(1-hdw(t))))", "hzz(t)"),
+                   ('t', T0 * 0.9, 0.7), ('k', -1.2, 1.2), HAIR_DK, 'hairUnder', ('point', (0, 0, 9)))
 
     rng = np.random.default_rng(11)
     R = rng.random
@@ -216,9 +226,10 @@ vectors are polynomials too.""")
         U = bezier_poly(interp_bezier([mul(s_, w_) for s_, w_ in zip(sides, wid)]))
         Vv = bezier_poly(interp_bezier([mul(n_, t_) for n_, t_ in zip(nrms, thk)]))
         xyz = tuple(f"{horner(C[i], 't')}+cos(w)*({horner(U[i], 't')})+lcs(w)*({horner(Vv[i], 't')})" for i in range(3))
-        sc.surface(xyz, ('t', 0, 1), ('w', 0, '2*pi'), color, ref, ('tube', 'u'))
+        with sc.turned(**HEAD_TURN):
+            sc.surface(xyz, ('t', 0, 1), ('w', 0, '2*pi'), color, ref, ('tube', 'u'))
 
-    def bang(ref, phis, tip, w0, color, ths=(0.14, 0.75, 1.32), fwd_=0.05, off=0.04):
+    def bang(ref, phis, tip, w0, color, ths=(0.14, 0.75, 1.32), fwd_=0.05, off=0.04, tk=1.0):
         p0, p1, p2 = dome(ths[0], phis[0], 1.005), dome(ths[1], phis[1], 1.035), dome(ths[2], phis[2], 1.045)
         xt, zt = tip
         p4 = (xt, fyf(xt, zt) - off, zt)
@@ -228,7 +239,7 @@ vectors are polynomials too.""")
         n3 = unit((0.4 * x3, -1, 0.15))
         n4 = unit((0.4 * xt, -1, 0.0))
         blade(ref, [p0, p1, p2, p3, p4], [dome_normal(p0), dome_normal(p1), dome_normal(p2), n3, n4],
-              [0.18 * w0, 0.95 * w0, w0, 0.6 * w0, 0.0], [0.008, 0.04, 0.045, 0.03, 0.0], color)
+              [0.18 * w0, 0.95 * w0, w0, 0.6 * w0, 0.0], [0.008 * tk, 0.04 * tk, 0.045 * tk, 0.03 * tk, 0.0], color)
 
     bang('bang1', (0.3, 0.2, 0.1), (0.03, ZE - 0.05), 0.16, HAIR)
     bang('bang2', (0.05, -0.1, -0.2), (-0.14, ZE + 0.03), 0.15, HAIR_LT)
@@ -247,6 +258,41 @@ vectors are polynomials too.""")
         nr = [dome_normal(pts[0]), dome_normal(pts[1]), unit((sd, -0.25, 0)), unit((sd, -0.3, 0)), unit((sd, -0.5, 0))]
         blade(f'frame{tag}', pts, nr, [0.04, 0.15, 0.14, 0.1, 0.0], [0.008, 0.04, 0.04, 0.03, 0.0], HAIR)
 
+    sc.comment("""Thin wisps from the bangs that cross the eyes, and locks that fall from the temples in front of the
+cheeks to below the jaw, so the face shows as a soft narrow oval between them, as on the sheet.""")
+    bang('wisp1', (0.22, 0.02, -0.14), (-0.25, ZE - 0.07), 0.035, HAIR_LT, off=0.042, tk=0.45)
+    bang('wisp2', (0.42, 0.36, 0.3), (0.27, ZE - 0.03), 0.03, HAIR_LT, off=0.042, tk=0.45)
+    bang('wisp3', (-0.45, -0.78, -0.98), (-0.5, ZE - 0.1), 0.032, HAIR, off=0.042, tk=0.45)
+
+    def face_normal(x, z, e=1e-4):
+        return unit(((fyf(x + e, z) - fyf(x - e, z)) / (2 * e), -1, (fyf(x, z + e) - fyf(x, z - e)) / (2 * e)))
+
+    def cheek_lock(ref, sd, dx, x2, x3, x4, z4, w0, color, gap=0.045):
+        p0 = dome(0.6, (1.12 + dx) * sd, 1.01)
+        p1 = dome(1.22, (1.18 + 0.5 * dx) * sd, 1.045)
+        z2, z3 = ZE + 0.02, ZE - 0.3
+        p2 = (x2 * sd, fyf(x2 * sd, z2) - gap, z2)
+        p3 = (x3 * sd, fyf(x3 * sd, z3) - gap, z3)
+        p4 = (x4 * sd, -0.3, z4)
+        # keep clear of the face: wherever the centre line is over the face it stays gap/2 in front of it;
+        # if it does not, bring the lower part of the lock forward
+        for _ in range(12):
+            pts = [p0, p1, p2, p3, p4]
+            Cb = interp_bezier(pts)
+            worst = min([fyf(P[0], P[2]) - P[1] for P in (bezier_eval(Cb, u) for u in np.linspace(0, 1, 300))
+                         if HC + 0.01 < P[2] < ZE + 0.6 and abs(P[0]) < sc.ns['fwd'](P[2])] or [1])
+            if worst > gap * 0.5:
+                break
+            p3, p4 = sub(p3, (0, 0.006, 0)), sub(p4, (0, 0.012, 0))
+        assert worst > gap * 0.5, (ref, worst)
+        nr = [dome_normal(p0), dome_normal(p1), face_normal(p2[0], z2), face_normal(p3[0], z3), unit((0.6 * sd, -1, 0))]
+        blade(ref, pts, nr, [0.035, 0.9 * w0, w0, 0.85 * w0, 0.0], [0.008, 0.03, 0.028, 0.024, 0.0], color)
+
+    for sd, tag in ((1, 'L'), (-1, 'R')):
+        cheek_lock(f'cheekLock{tag}1', sd, 0.0, 0.6, 0.53, 0.42, ZE - 0.82, 0.075, HAIR)
+        cheek_lock(f'cheekLock{tag}2', sd, -0.07, 0.56, 0.47, 0.33, ZE - 0.66, 0.05, HAIR_LT)
+        cheek_lock(f'cheekLock{tag}3', sd, 0.06, 0.595, 0.55, 0.48, ZE - 0.98, 0.06, HAIR_DK)
+
     # ---------- the braid crown ----------
     sc.blank()
     sc.note('Braid')
@@ -260,13 +306,14 @@ of a turn apart: the classic three-strand braid.""")
     sc.func('bdz(a,ro)', f"{fmt(math.cos(THC))}-ro*{fmt(TV_ * math.sin(THC))}*sin(a)")
     sc.func('bdn(a,ro)', 'sqrt(bdx(a,ro)^2+bdy(a,ro)^2+bdz(a,ro)^2)')
     NB = 13
-    for j in range(3):
-        tau = f"({NB}*a+{fmt(2 * math.pi * j / 3)})"
-        RO = f"(1+0.1*sin{tau}+0.085*cos(v))"
-        RR = f"(1.13+0.04*sin(2*{tau})+0.07*sin(v))"
-        for q in range(4):
-            sc.surface((f"{fmt(HDX)}*{RR}*bdx(a,{RO})/bdn(a,{RO})", f"{fmt(HY0)}+{fmt(HDY)}*{RR}*bdy(a,{RO})/bdn(a,{RO})", f"{fmt(ZHC)}+{fmt(HDZ)}*{RR}*bdz(a,{RO})/bdn(a,{RO})"),
-                       ('a', q * math.pi / 2, (q + 1) * math.pi / 2), ('v', 0, '2*pi'), (HAIR, HAIR_LT, HAIR_DK)[j], f'braid{j + 1}{"abcd"[q]}', ('tube', 'u'))
+    with sc.turned(**HEAD_TURN):
+        for j in range(3):
+            tau = f"({NB}*a+{fmt(2 * math.pi * j / 3)})"
+            RO = f"(1+0.1*sin{tau}+0.085*cos(v))"
+            RR = f"(1.13+0.04*sin(2*{tau})+0.07*sin(v))"
+            for q in range(4):
+                sc.surface((f"{fmt(HDX)}*{RR}*bdx(a,{RO})/bdn(a,{RO})", f"{fmt(HY0)}+{fmt(HDY)}*{RR}*bdy(a,{RO})/bdn(a,{RO})", f"{fmt(ZHC)}+{fmt(HDZ)}*{RR}*bdz(a,{RO})/bdn(a,{RO})"),
+                           ('a', q * math.pi / 2, (q + 1) * math.pi / 2), ('v', 0, '2*pi'), (HAIR, HAIR_LT, HAIR_DK)[j], f'braid{j + 1}{"abcd"[q]}', ('tube', 'u'))
     return THC, TH_, TV_
 
 
