@@ -26,7 +26,7 @@ PARTS = set(args.parts.split(','))
 def want(p): return 'all' in PARTS or p in PARTS
 
 # ---------------- palette ----------------
-SKIN = '#e4beb4'
+SKIN = '#e6c2b8'
 SKIN_SH = '#d3a79c'
 HAIR_HI = '#f2a76a'
 HAIR = '#d86a2c'

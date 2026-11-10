@@ -49,7 +49,7 @@ sc.func('fwd(h)', f"fws(h)*sqrt(max(0,h-{fmt(HC)})/(h-{fmt(HC - 0.025)}))")
 sc.func('fd(h)', f"smn({fmt(Y0)}-fpl(h),1.18*fwd(h),0.08)")
 sc.func('fq(h)', f"0.3-0.11*exp(-((h-{fmt(ZE)})/0.14)^2)+0.15/(1+exp((h-{fmt(ZE - 0.3)})/0.07))")
 NT = ZE - 0.235     # height of the tip of the nose
-sc.func('fno(h)', f"0.07*exp(-(max(0,h-{fmt(NT)})/0.075)^1.4-(max(0,{fmt(NT)}-h)/0.03)^2)")
+sc.func('fno(h)', f"0.066*exp(-(max(0,h-{fmt(NT)})/0.055)^1.5-(max(0,{fmt(NT)}-h)/0.03)^2)")
 sc.func('fr(p,h)',
         f"-fno(h)*exp(-(p/(0.024+0.022*exp(-((h-{fmt(NT - 0.01)})/0.05)^2)))^2)"
         f"-0.008*exp(-((h-{fmt(NT - 0.015)})/0.06)^2-(p/0.1)^2)"
