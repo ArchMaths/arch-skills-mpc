@@ -2,7 +2,7 @@
 """Generates claude-chan-3d.arch, Claude Chan as a static 3D Arch figure.
 
     python3 generate.py                      # writes claude-chan-3d.arch next to this file
-    python3 generate.py --view face -o f.arch --prec 4 --parts head,hair,ornament,earrings
+    python3 generate.py --view face -o f.arch --prec 4 --parts head,hair,ornament,earrings,body,cape
 
 Then build the save file with the arch-mcp CLI (see README.md). Needs Python 3 and numpy.
 The other modules (face.py, outfit.py, hair.py) are run inside this one and share its names.
@@ -85,8 +85,8 @@ def ellipsoid(C, R, color, ref, fr=None, orient='closed', urange=(0, 'pi'), opac
 # =====================================================================
 #  HEAD AND FACE
 # =====================================================================
-if want('head'):
-    run('face.py')
+if want('head') or want('hair') or want('ornament') or want('earrings'):
+    run('face.py')        # the hair and accessories are placed on the head, so they need it too
 
 # =====================================================================
 #  HAIR ORNAMENT (her left side): chrysanthemum on a black bow, ribbons, gold tassel
@@ -221,19 +221,15 @@ sc.blank()
 views = {
     'full': '@view 3d azimuth=-62 elevation=8 unit=26 center=0,0,6.5',
     'front': '@view 3d azimuth=-90 elevation=5 unit=26 center=0,0,6.5',
-    'face': '@view 3d azimuth=-90 elevation=3 unit=170 center=0,0,11.9',
-    'faceside': '@view 3d azimuth=-155 elevation=3 unit=170 center=0,0,11.9',
-    'head': '@view 3d azimuth=-62 elevation=8 unit=105 center=0,0,11.6',
-    'headback': '@view 3d azimuth=110 elevation=12 unit=80 center=0,0.3,11.0',
-    'upper': '@view 3d azimuth=-70 elevation=6 unit=60 center=0,0,9.6',
+    'left': '@view 3d azimuth=0 elevation=5 unit=26 center=0,0,6.5',
     'back': '@view 3d azimuth=90 elevation=8 unit=26 center=0,0,6.5',
-    'side': '@view 3d azimuth=-180 elevation=6 unit=26 center=0,0,6.5',
-    'torso': '@view 3d azimuth=-75 elevation=6 unit=70 center=0,0,9.3',
-    'lower': '@view 3d azimuth=-70 elevation=8 unit=45 center=0,0,2.6',
-    'skirt': '@view 3d azimuth=-70 elevation=10 unit=48 center=0,0,4',
+    'face': '@view 3d azimuth=-90 elevation=3 unit=150 center=0,0,11.75',
+    'profile': '@view 3d azimuth=0 elevation=3 unit=150 center=0,0,11.75',
+    'head': '@view 3d azimuth=-62 elevation=8 unit=110 center=0,0,11.6',
+    'braid': '@view 3d azimuth=100 elevation=18 unit=100 center=0,0.3,11.6',
+    'upper': '@view 3d azimuth=-70 elevation=6 unit=60 center=0,0,9.6',
     'waist': '@view 3d azimuth=-72 elevation=6 unit=120 center=0.4,-0.3,8.0',
     'feet': '@view 3d azimuth=-70 elevation=12 unit=110 center=0,-0.6,0.8',
-    'face2': '@view 3d azimuth=-75 elevation=4 unit=150 center=0.1,0,11.8',
 }
 sc.raw(views.get(args.view, args.view))
 st = '@set showAxes=false gridStyle=hidden'

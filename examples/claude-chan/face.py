@@ -45,9 +45,9 @@ sc.func('fwd(h)', f"smn(smn(0.645,0.69*sqrt(max(0,1-(max(0,h-{fmt(ZE + 0.3)})/0.
 sc.func('fd(h)', f"smn({fmt(Y0)}-fpl(h),1.25*fwd(h),0.08)")
 sc.func('fq(h)', f"0.3-0.115*exp(-((h-{fmt(ZE - 0.03)})/0.2)^2)+0.1/(1+exp((h-{fmt(ZE - 0.5)})/0.06))")
 NT = ZE - 0.235     # height of the tip of the nose
-sc.func('fno(h)', f"0.078*exp(-(max(0,h-{fmt(NT)})/0.09)^1.3-(max(0,{fmt(NT)}-h)/0.03)^2)")
+sc.func('fno(h)', f"0.07*exp(-(max(0,h-{fmt(NT)})/0.075)^1.4-(max(0,{fmt(NT)}-h)/0.03)^2)")
 sc.func('fr(p,h)',
-        f"-fno(h)*exp(-(p/(0.022+0.022*exp(-((h-{fmt(NT - 0.01)})/0.05)^2)))^2)"
+        f"-fno(h)*exp(-(p/(0.024+0.022*exp(-((h-{fmt(NT - 0.01)})/0.05)^2)))^2)"
         f"-0.008*exp(-((h-{fmt(NT - 0.015)})/0.06)^2-(p/0.1)^2)"
         f"-0.008*exp(-((h-{fmt(ZE - 0.39)})/0.03)^2-(p/0.085)^2)"
         f"+0.006*exp(-((h-{fmt(ZE - 0.425)})/0.012)^2-(p/0.08)^2)"
@@ -80,21 +80,21 @@ capsule((0, 0.04, 10.2), (0, -0.05, 11.52), 0.2, 0.205, SKIN_SH, 'neck')
 
 EAR_LOBES = {}
 sc.comment("Ears: a dished shell with a rolled helix, an inner fold, the concha, tragus and lobe.")
-EK = 0.74
+EK = 0.8
 for side, tag in ((1, 'L'), (-1, 'R')):
-    n = unit((side, 0.3, 0))
-    up0 = (0, 0.25, 1)
+    n = unit((side, 0.42, 0))
+    up0 = (0, 0.33, 1)
     b = unit(sub(up0, mul(n, dot(up0, n))))
     a = cross(b, n)
     if dot(a, (0, 1, 0)) < 0:
         a = mul(a, -1)          # a points toward the back of the head
-    C = (side * 0.6, 0.22, ZE - 0.045)
+    C = (side * 0.612, 0.23, ZE - 0.045)
     fr = (a, b, n)
     k = lambda v: fmt(v * EK)
-    sc.surface(place((f"{k(0.115)}*r*cos(w)-{k(0.01)}", f"{k(0.2)}*r*sin(w)", f"{k(0.014)}+{k(0.03)}*r^6-{k(0.012)}*(1-r^2)"), C, fr), ('r', 0, 1), ('w', 0, '2*pi'), SKIN, f'ear{tag}', ('dir', n))
-    sc.surface(place((f"{k(0.115)}*r*cos(w)-{k(0.01)}", f"{k(0.2)}*r*sin(w)", f"-{k(0.004)}-{k(0.012)}*(1-r^2)"), C, fr), ('r', 0, 1), ('w', 0, '2*pi'), SKIN_SH, f'earBack{tag}', ('dir', mul(n, -1)))
-    sc.surface(place((f"({k(0.115)}+{k(0.02)}*cos(v))*cos(w)-{k(0.01)}", f"({k(0.2)}+{k(0.02)}*cos(v))*sin(w)", f"{k(0.042)}+{k(0.02)}*sin(v)"), C, fr), ('w', -1.75, 2.05), ('v', 0, '2*pi'), SKIN, f'earHelix{tag}', ('tube', 'u'))
-    sc.surface(place((f"({k(0.065)}+{k(0.012)}*cos(v))*cos(w)+{k(0.005)}", f"({k(0.12)}+{k(0.012)}*cos(v))*sin(w)+{k(0.01)}", f"{k(0.03)}+{k(0.012)}*sin(v)"), C, fr), ('w', -1.1, 1.7), ('v', 0, '2*pi'), SKIN, f'earFold{tag}', ('tube', 'u'))
+    sc.surface(place((f"{k(0.105)}*r*cos(w)*(1+0.25*sin(w))-{k(0.01)}", f"{k(0.2)}*r*sin(w)", f"{k(0.014)}+{k(0.03)}*r^6-{k(0.012)}*(1-r^2)"), C, fr), ('r', 0, 1), ('w', 0, '2*pi'), SKIN, f'ear{tag}', ('dir', n))
+    sc.surface(place((f"{k(0.105)}*r*cos(w)*(1+0.25*sin(w))-{k(0.01)}", f"{k(0.2)}*r*sin(w)", f"-{k(0.004)}-{k(0.012)}*(1-r^2)"), C, fr), ('r', 0, 1), ('w', 0, '2*pi'), SKIN_SH, f'earBack{tag}', ('dir', mul(n, -1)))
+    sc.surface(place((f"({k(0.105)}+{k(0.02)}*cos(v))*cos(w)*(1+0.25*sin(w))-{k(0.01)}", f"({k(0.2)}+{k(0.02)}*cos(v))*sin(w)", f"{k(0.042)}+{k(0.02)}*sin(v)"), C, fr), ('w', -1.75, 2.05), ('v', 0, '2*pi'), SKIN, f'earHelix{tag}', ('tube', 'u'))
+    sc.surface(place((f"({k(0.06)}+{k(0.012)}*cos(v))*cos(w)*(1+0.25*sin(w))+{k(0.005)}", f"({k(0.12)}+{k(0.012)}*cos(v))*sin(w)+{k(0.01)}", f"{k(0.03)}+{k(0.012)}*sin(v)"), C, fr), ('w', -1.1, 1.7), ('v', 0, '2*pi'), SKIN, f'earFold{tag}', ('tube', 'u'))
     sc.surface(place((f"{k(0.05)}*r*cos(w)-{k(0.005)}", f"{k(0.075)}*r*sin(w)-{k(0.035)}", k(0.016)), C, fr), ('r', 0, 1), ('w', 0, '2*pi'), '#c9958a', f'earConcha{tag}', ('dir', n))
     ellipsoid(add(C, add(mul(a, -0.1 * EK), mul(b, -0.03 * EK))), (0.022 * EK, 0.03 * EK, 0.022 * EK), SKIN, f'earTragus{tag}', fr=fr)
     lobe = add(C, mul(b, -0.19 * EK))

@@ -121,24 +121,24 @@ down the fall. hdw keeps a lock's width steady as the hair spreads.""")
     sc.func('hry(t)', f"{fmt(HDY)}*sin(ha(t)){gy}")
     sc.func('hdw(t)', 'min(1,1.54/(hrx(t)+hry(t)))')
     sc.comment("""A lock is a tube around its own flow line. lpc is the angle of that line around the head: a starting
-angle p0 (0 = straight back, + toward her left) that closes up by sg as the hair spreads (sg = 1 falls
-straight down, sg = 0 fans out over the shoulders), a drift dr, and a wave of size am that grows down the
+angle pb+p0 (0 = straight back, + toward her left) whose part p0 closes up by sg as the hair spreads (sg = 1
+falls straight down, sg = 0 fans out over the shoulders; pb is 0 for the back and pi for the front), a drift dr, and a wave of size am that grows down the
 lock. lrc is how far the line stands off the hair surface: its layer la, and the wave again a quarter turn
 later, so the lock snakes in and out as well as side to side. Across the lock (w runs around it) lwd is
 the half-width and lth the thickness, a crescent lcs with three ridges that is flat underneath. ltp tapers
 the lock toward its end te, and lq runs 0..1 over the last stretch, where the tip turns through three
 quarters of a circle: sideways like a hook, or outward like a scroll.""")
-    sc.func('ltp(t,te)', 'min(1,max(0,te-t)/0.2)^0.8')
+    sc.func('ltp(t,te)', 'min(1,max(0,te-t)/0.13)^0.6')
     sc.func('lq(t,te)', 'max(0,1-max(0,te-t)/0.08)')
     sc.func('lcs(w)', '(0.65*sin(w)+0.35*abs(sin(w)))*(0.78+0.22*cos(2*pi*cos(w)))')
-    sc.func('lpc(t,p0,sg,dr,am,kk,ph)', 'p0*(1-sg*(1-hdw(t)))+dr*hu(t)+am*hu(t)^1.5*sin(kk*hu(t)+ph)')
+    sc.func('lpc(t,pb,p0,sg,dr,am,kk,ph)', 'pb+p0*(1-sg*(1-hdw(t)))+dr*hu(t)+am*hu(t)^1.5*sin(kk*hu(t)+ph)')
     sc.func('lrc(t,la,am,kk,ph)', 'la*min(1,t/0.04)+0.6*am*hu(t)^1.5*cos(kk*hu(t)+ph)')
     sc.func('lwd(t,te,hw)', 'hw*ltp(t,te)*hdw(t)')
     sc.func('lth(t,w,te,th)', 'th*ltp(t,te)*lcs(w)*min(1,t/0.04)')
 
-    def lock(ref, p0, sg, dr, hw, te, la, th, am, kk, ph, col, curl=('side', 1, 0.12), start=0.012):
+    def lock(ref, p0, sg, dr, hw, te, la, th, am, kk, ph, col, curl=('side', 1, 0.12), start=0.012, pb=0.0):
         """One lock: main part, then its curled tip as a second surface (so the curl gets a fine mesh)."""
-        PC = f"lpc(t,{fmt(p0)},{fmt(sg)},{fmt(dr)},{fmt(am)},{fmt(kk)},{fmt(ph)})"
+        PC = f"lpc(t,{fmt(pb)},{fmt(p0 - pb)},{fmt(sg)},{fmt(dr)},{fmt(am)},{fmt(kk)},{fmt(ph)})"
         RC = f"lrc(t,{fmt(la)},{fmt(am)},{fmt(kk)},{fmt(ph)})"
         WD = f"lwd(t,{fmt(te)},{fmt(hw)})"
         TH = f"lth(t,w,{fmt(te)},{fmt(th)})"
@@ -164,8 +164,8 @@ quarters of a circle: sideways like a hook, or outward like a scroll.""")
     sc.comment("A dark cap and an inner sheet under the locks, so no gap shows skin.")
     sc.surface((f"{fmt(HDX * 0.98)}*sin(u)*cos(v)", f"{fmt(HY0)}+{fmt(HDY * 0.98)}*sin(u)*sin(v)", f"{fmt(ZHC)}+{fmt(HDZ * 0.98)}*cos(u)"),
                ('u', 0, 1.75), ('v', 0, '2*pi'), HAIR_DK, 'hairCap', ('point', (0, HY0, ZHC)))
-    sc.surface(("(hrx(t)-0.03)*sin(k*(1-0.75*(1-hdw(t))))", f"{fmt(HY0)}+(hry(t)-0.03)*cos(k*(1-0.75*(1-hdw(t))))", "hzz(t)"),
-               ('t', T0 * 0.9, 0.7), ('k', -1.1, 1.1), HAIR_SH, 'hairUnder', ('point', (0, 0, 9)))
+    sc.surface(("(hrx(t)-0.03)*sin(k*(1-0.64*(1-hdw(t))))", f"{fmt(HY0)}+(hry(t)-0.03)*cos(k*(1-0.64*(1-hdw(t))))", "hzz(t)"),
+               ('t', T0 * 0.9, 0.7), ('k', -1.2, 1.2), HAIR_SH, 'hairUnder', ('point', (0, 0, 9)))
 
     rng = np.random.default_rng(11)
     R = rng.random
@@ -174,11 +174,11 @@ quarters of a circle: sideways like a hook, or outward like a scroll.""")
     sc.comment("""Long locks. Down the back they fall straight in three layers (wide ones underneath, the main
 layer, thin lighter strands on top); at the sides they fan out over the shoulders and arms.""")
     for i, p0 in enumerate((-1.0, -0.68, -0.34, 0.0, 0.34, 0.68, 1.0)):
-        lock(f'backU{i + 1}', p0, 0.78, 0.05 * (R() - 0.5), 0.28, 0.86 + 0.1 * R(), 0.0, 0.05, 0.07 + 0.04 * R(), 8 + 3 * R(), 6.28 * R(), HAIR_DK, curl=cdir(0.11))
+        lock(f'backU{i + 1}', p0, 0.66, 0.05 * (R() - 0.5), 0.28, 0.86 + 0.1 * R(), 0.0, 0.05, 0.07 + 0.04 * R(), 8 + 3 * R(), 6.28 * R(), HAIR_DK, curl=cdir(0.11))
     for i, p0 in enumerate((-0.85, -0.51, -0.17, 0.17, 0.51, 0.85)):
-        lock(f'back{i + 1}', p0, 0.8, 0.06 * (R() - 0.5), 0.24, 0.9 + 0.1 * R(), 0.04, 0.055, 0.09 + 0.05 * R(), 9 + 4 * R(), 6.28 * R(), HAIR, curl=cdir(0.13))
+        lock(f'back{i + 1}', p0, 0.68, 0.06 * (R() - 0.5), 0.24, 0.9 + 0.1 * R(), 0.04, 0.055, 0.09 + 0.05 * R(), 9 + 4 * R(), 6.28 * R(), HAIR, curl=cdir(0.13))
     for i, p0 in enumerate((-0.7, -0.3, 0.1, 0.45, 0.8)):
-        lock(f'backT{i + 1}', p0, 0.8, 0.12 * (R() - 0.5), 0.1, 0.8 + 0.18 * R(), 0.085, 0.04, 0.12 + 0.06 * R(), 10 + 5 * R(), 6.28 * R(), HAIR_LT, curl=cdir(0.12))
+        lock(f'backT{i + 1}', p0, 0.68, 0.12 * (R() - 0.5), 0.1, 0.8 + 0.18 * R(), 0.085, 0.04, 0.12 + 0.06 * R(), 10 + 5 * R(), 6.28 * R(), HAIR_LT, curl=cdir(0.12))
     side = [  # p0 (her right; mirrored for her left), layer, half-width, colour
         (1.3, 'U', 0.3, HAIR_DK), (1.62, 'U', 0.28, HAIR_DK), (1.18, 'M', 0.24, HAIR), (1.5, 'M', 0.24, HAIR), (1.8, 'M', 0.2, HAIR),
         (1.35, 'T', 0.1, HAIR_LT), (1.68, 'T', 0.1, HAIR_LT)]
@@ -190,9 +190,11 @@ layer, thin lighter strands on top); at the sides they fan out over the shoulder
                 continue
             la_, th_ = {'U': (0.0, 0.05), 'M': (0.04, 0.055), 'T': (0.085, 0.04)}[lay]
             lock(f'side{tag}{i + 1}', sd * p0, 0.25, -sd * (0.1 + 0.1 * R()), hw_, 0.74 + 0.16 * R(), la_, th_, 0.1 + 0.06 * R(), 9 + 4 * R(), 6.28 * R(), col, curl=cdir(0.13))
-    sc.comment("Thin locks in front of the ears that fall over the chest.")
-    for ref, p0, te, col in (('frontR1', -1.98, 0.6, HAIR), ('frontR2', -2.17, 0.5, HAIR_LT), ('frontL1', 1.96, 0.56, HAIR), ('frontL2', 2.14, 0.47, HAIR_LT)):
-        lock(ref, p0, 0.3, 0.05 * (R() - 0.5), 0.085, te, 0.05, 0.04, 0.05 + 0.03 * R(), 8 + 3 * R(), 6.28 * R(), col, curl=cdir(0.09))
+    sc.comment("Locks in front of the ears that fall over the chest.")
+    for ref, p0, hw_, te, col in (('frontR1', -1.93, 0.13, 0.69, HAIR), ('frontR2', -2.08, 0.08, 0.6, HAIR_LT), ('frontR3', -1.84, 0.07, 0.74, HAIR_DK),
+                                  ('frontL1', 1.9, 0.12, 0.67, HAIR), ('frontL2', 2.05, 0.08, 0.58, HAIR_LT)):
+        sd = 1 if p0 > 0 else -1
+        lock(ref, p0, 1.25, 0.04 * (R() - 0.5), hw_, te, 0.05, 0.04, 0.05 + 0.03 * R(), 8 + 3 * R(), 6.28 * R(), col, curl=('side', sd if R() < 0.7 else -sd, 0.09), pb=sd * math.pi)
 
     # ---------- bangs and the locks that frame the face ----------
     sc.blank()
@@ -235,14 +237,14 @@ vectors are polynomials too.""")
     bang('bang5', (-0.4, -0.72, -0.92), (-0.47, ZE + 0.06), 0.18, HAIR_LT)
     bang('bang6', (-0.7, -1.05, -1.27), (-0.6, ZE - 0.02), 0.18, HAIR)
     bang('bang7', (0.72, 0.97, 1.12), (0.57, ZE + 0.09), 0.17, HAIR)
-    bang('bang8', (1.0, 1.26, 1.42), (0.625, ZE - 0.04), 0.17, HAIR_LT)
+    bang('bang8', (1.0, 1.26, 1.42), (0.62, ZE + 0.13), 0.16, HAIR_LT)
     bang('bang9', (0.45, 0.6, 0.7), (0.37, ZE + 0.3), 0.13, HAIR)
     bang('bang10', (0.62, 0.85, 0.97), (0.5, ZE + 0.2), 0.14, HAIR_LT)
     for sd, tag in ((1, 'L'), (-1, 'R')):
-        pts = [dome(0.3, 1.25 * sd, 1.005), dome(1.15, 1.42 * sd, 1.04), (0.69 * sd, -0.27, ZE + 0.06), (0.63 * sd, -0.43, ZE - 0.18)]
-        xt, zt = 0.45 * sd, ZE - 0.34
+        pts = [dome(0.3, 1.5 * sd, 1.005), dome(1.15, 1.62 * sd, 1.04), (0.71 * sd, -0.07, ZE + 0.06), (0.69 * sd, -0.13, ZE - 0.2)]
+        xt, zt = 0.6 * sd, ZE - 0.38
         pts.append((xt, fyf(xt, zt) - 0.045, zt))
-        nr = [dome_normal(pts[0]), dome_normal(pts[1]), unit((sd, -0.5, 0)), unit((sd * 0.8, -0.7, 0)), unit((sd * 0.5, -1, 0))]
+        nr = [dome_normal(pts[0]), dome_normal(pts[1]), unit((sd, -0.25, 0)), unit((sd, -0.3, 0)), unit((sd, -0.5, 0))]
         blade(f'frame{tag}', pts, nr, [0.04, 0.15, 0.14, 0.1, 0.0], [0.008, 0.04, 0.04, 0.03, 0.0], HAIR)
 
     # ---------- the braid crown ----------
