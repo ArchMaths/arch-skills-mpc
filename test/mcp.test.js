@@ -23,10 +23,11 @@ after(async () => {
 
 const textOf = result => result.content.filter(c => c.type === 'text').map(c => c.text).join('\n');
 
-test('lists the four tools with instructions', async () => {
+test('lists the five tools with instructions', async () => {
     const {tools} = await client.listTools();
-    assert.deepEqual(tools.map(t => t.name).sort(), ['arch_build', 'arch_check', 'arch_decompile', 'arch_guide']);
+    assert.deepEqual(tools.map(t => t.name).sort(), ['arch_build', 'arch_check', 'arch_decompile', 'arch_guide', 'arch_svg']);
     assert.match(client.getInstructions(), /arch_guide/);
+    assert.match(client.getInstructions(), /arch_svg/);
 });
 
 test('arch_guide returns the guide', async () => {
@@ -85,4 +86,20 @@ test('arch_build refuses to write a broken script', async () => {
     const result = await client.callTool({name: 'arch_build', arguments: {script: 'sin(', output_path: 'out/broken.txt', screenshot: false}});
     assert.equal(result.isError, true);
     assert.ok(!existsSync(join(dir, 'out/broken.txt')));
+});
+
+test('arch_svg converts an SVG and writes the scene script and save file', async () => {
+    const svg = '<svg viewBox="0 0 10 10"><title>Two squares</title><rect width="6" height="6" fill="#e63946"/>' +
+        '<rect x="4" y="4" width="6" height="6" fill="#457b9d" filter="url(#none)"/></svg>';
+    const result = await client.callTool({name: 'arch_svg', arguments: {svg, output_path: 'out/squares.txt', screenshot: false}});
+    assert.equal(result.isError, false, textOf(result));
+    assert.match(textOf(result), /Converted: 2 colour region\(s\)/);
+    assert.match(textOf(result), /filters are ignored/);
+    assert.match(textOf(result), /OK: wrote .*squares\.txt/);
+    const save = JSON.parse(readFileSync(join(dir, 'out/squares.txt'), 'utf8'));
+    assert.equal(save.name, 'Two squares');
+    assert.ok(save.entries.some(e => e.sign === '<'));
+    assert.match(readFileSync(join(dir, 'out/squares.arch'), 'utf8'), /^cos\(pi\*/m);
+    const missing = await client.callTool({name: 'arch_svg', arguments: {svg}});
+    assert.equal(missing.isError, true);
 });

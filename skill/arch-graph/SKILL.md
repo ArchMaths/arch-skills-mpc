@@ -1,6 +1,6 @@
 ---
 name: arch-graph
-description: Create or edit Arch graphing-calculator save files (.txt): function graphs, geometry constructions, sliders and animations, 3D surfaces, canvas text, JavaScript operators. Builds them from a short scene script with the real Arch engine. Use whenever the user wants an Arch file, figure or graph, or wants to change an existing Arch save file. Arch is a GeoGebra-like calculator, not Arch Linux.
+description: Create or edit Arch graphing-calculator save files (.txt): function graphs, geometry constructions, sliders and animations, 3D surfaces, canvas text, JavaScript operators, and pictures converted from SVG. Builds them from a short scene script with the real Arch engine. Use whenever the user wants an Arch file, figure or graph, wants to turn an SVG into an Arch file, or wants to change an existing Arch save file. Arch is a GeoGebra-like calculator, not Arch Linux.
 ---
 
 # Arch save files
@@ -16,6 +16,10 @@ Arch save files (`.txt`, JSON) contain parser-computed fields, so **never write 
 5. Build: `{{CLI}} name.arch -o name.txt --brief`. It writes the file only when there are no errors and the saved file reloads identically.
 
 To change an existing save file: `{{CLI}} --decompile file.txt -o file.arch`, edit, rebuild. It warns about anything a script can't express (drawings, images, tables).
+
+## SVG drawings
+
+`{{SVG2ARCH}} drawing.svg -o drawing.txt --png shot.png --png-scale 0.5` fills every colour with inequalities (filters are ignored) and writes `drawing.arch` and `drawing.txt`. Read its conversion warnings; `--precision 8` shows finer detail (slower redraws), `--tolerance 1` gives fewer edges. Don't hand-edit the generated regions; change the SVG and convert again.
 
 ## More reference: read only what the task needs
 

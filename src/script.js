@@ -14,7 +14,7 @@
 export const PLAY_MODES = {pingpong: 0, bounce: 0, forward: 1, loop: 1, reverse: 2, backward: 2, once: 3, 'once-reverse': 4};
 export const DASHES = ['solid', 'long', 'short', 'dotted'];
 export const PERSISTED_SETTINGS = ['showAxes', 'showAxisNumbers', 'showPointLabels', 'gridStyle', 'tmin', 'tmax',
-    'geometryMeasurementDisplay', 'showHiddenMath', 'showHiddenGeo', 'implicitPrecision'];
+    'geometryMeasurementDisplay', 'showHiddenMath', 'showHiddenGeo', 'implicitPrecision', 'autoBreakpointDetection'];
 
 const NAMED_COLORS = {
     red: '#e53935', orange: '#fb8c00', yellow: '#fdd835', green: '#43a047', teal: '#00897b', cyan: '#00acc1',

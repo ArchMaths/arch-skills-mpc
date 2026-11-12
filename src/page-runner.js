@@ -184,8 +184,9 @@ export async function runSteps({steps, title, script, messages = []}) {
         try {
             if (step.text) await guarded(() => api.execute({tool: 'objects.create', args: {expression: expr}}));
             // objects.create rolls back and throws with Arch's own error prompt text. It refuses
-            // braces, so ranges like x=cos(u),y=sin(u){u,0,pi} go in the way Arch's input box adds them.
-            else await refuseTextFallback(expr, () => /[{}]/.test(expr) ? rawCreate(expr)
+            // braces and expressions over 6000 characters, so ranges like x=cos(u),y=sin(u){u,0,pi}
+            // and long generated expressions (svg2arch regions) go in the way Arch's input box adds them.
+            else await refuseTextFallback(expr, () => /[{}]/.test(expr) || expr.length > 6000 ? rawCreate(expr)
                 : guarded(() => api.execute({tool: 'objects.create', args: {expression: expr}})));
         } catch (error) {
             return err(line, error.unreadable ? error.message : `Arch rejected "${expr}": ${translate(error.message)}`);

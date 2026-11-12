@@ -26,6 +26,7 @@ export function renderSkill(root = ROOT) {
     const repo = slashes(root);
     return readFileSync(SKILL_SOURCE, 'utf8')
         .replaceAll('{{CLI}}', `node "${repo}/src/cli.js"`)
+        .replaceAll('{{SVG2ARCH}}', `node "${repo}/src/svg2arch.js"`)
         .replaceAll('{{REPO}}', repo)
         .trimEnd() + `\n\n${MARKER}\n`;
 }

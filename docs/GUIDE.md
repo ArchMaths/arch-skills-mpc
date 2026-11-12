@@ -10,6 +10,7 @@ Arch is a GeoGebra-like graphing calculator. You describe a figure as a **scene 
 2. Check it (`arch_check` / `arch-build --check`). Read every error and warning, verify the computed values in the object list, and look at the screenshot.
 3. Fix and re-check until clean, then build (`arch_build` / `arch-build scene.arch -o out.txt`).
 4. To change an existing save file: decompile it (`arch_decompile` / `arch-build --decompile`), edit the script, rebuild.
+5. To turn an SVG picture into an Arch file, use `arch_svg` / `svg2arch drawing.svg` rather than writing a script: it fills every colour with inequalities and writes both the script and the save file.
 
 The build stops with errors (and writes nothing) for syntax errors, unknown object names, renamed duplicates, and invalid options. Arch's own input box keeps a line it cannot read as a `//` text note without any message; the tool reports that line as an error instead, with Arch's reason. Warnings mean the file is valid but something may be unintended. Take them seriously, especially "no valid position" and "auto-created variable".
 
@@ -57,7 +58,7 @@ Animation speed: Arch advances about `100*step` per second. For a span L in T se
 
 - `@title Name`: file name shown in Arch.
 - `@view x=a..b y=c..d`: fit this region (2D). Or `@view center=x,y unit=N` (N = pixels per unit). For 3D: `@view 3d azimuth=35 elevation=25` (degrees), plus `unit=N` to zoom and `center=x,y,z` to move the 3D box so it is centred on that point (z is Arch's z shift; use it instead of moving every object). `@view 2d` switches back.
-- `@set name=value ...`: saved document settings only: `showAxes`, `showAxisNumbers`, `showPointLabels` (true/false), `gridStyle` (`grid|dots|polar|hidden`), `tmin`, `tmax` (parametric t range, default -2*pi..2*pi), `geometryMeasurementDisplay`, `showHiddenMath`, `showHiddenGeo`, `implicitPrecision` (0.5..20, default 4: how finely implicit 3D and parametric surfaces are meshed; a parametric surface gets 12.5×value grid steps per side, at most 240, so 12 gives about 150 instead of 50; higher values look smoother but take longer to draw).
+- `@set name=value ...`: saved document settings only: `showAxes`, `showAxisNumbers`, `showPointLabels` (true/false), `gridStyle` (`grid|dots|polar|hidden`), `tmin`, `tmax` (parametric t range, default -2*pi..2*pi), `geometryMeasurementDisplay`, `showHiddenMath`, `showHiddenGeo`, `implicitPrecision` (0.5..20, default 4: how finely implicit 3D and parametric surfaces are meshed; a parametric surface gets 12.5×value grid steps per side, at most 240, so 12 gives about 150 instead of 50; higher values look smoother but take longer to draw. In 2D it sets the sampling grid for equations and inequalities: 20/value pixels), `autoBreakpointDetection` (true/false: Arch drops sign changes that are jumps rather than zeros when drawing equations; svg2arch line drawings rely on it).
 - `@style target | options`: restyle an existing object by name, ref, auto-number, or `last`.
 - `@text x=.. y=.. [size=] [color=] [width=] [height=] [smart|plain] | content`: canvas text box (see below).
 - `@frames total=N fps=F [current=K] [bind=expr]`: turn on frame-by-frame playback (see below).

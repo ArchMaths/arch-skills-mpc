@@ -1,0 +1,302 @@
+// svg2arch converter tests: pure Node, no browser.
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import {parseXml} from '../src/svg/xml.js';
+import {parseColor, archDimsColor} from '../src/svg/color.js';
+import {parsePath, parseTransform, apply, flatten} from '../src/svg/geom.js';
+import {SvgRenderer, parseLength} from '../src/svg/render.js';
+import {flattenOps, groupRegions, displayColor, gradientBands} from '../src/svg/regions.js';
+import {regionExpression, lineEquation, quantumFormatter, fmt} from '../src/svg/inequality.js';
+import {planLines} from '../src/svg/lines.js';
+import {convertSvg} from '../src/svg/index.js';
+import {parseScript} from '../src/script.js';
+import * as P from '../src/svg/poly.js';
+
+// Evaluates a generated Arch expression (left side of "<0" or "=0") at (x, y).
+function evaluator(expr) {
+    const lhs = expr.replace(/(<|=)0$/, '');
+    const js = lhs.replace(/heaviside\(/g, 'H(').replace(/abs\(/g, 'Math.abs(').replace(/sqrt\(/g, 'Math.sqrt(')
+        .replace(/cos\(/g, 'Math.cos(').replace(/\bpi\b/g, 'Math.PI');
+    assert.doesNotMatch(expr, /\^|pow\(/, 'only products, no powers');
+    const f = new Function('x', 'y', 'H', `return ${js};`);
+    return (x, y) => f(x, y, v => (v > 0 ? 1 : 0));
+}
+
+const ring = (q, ...pts) => pts.map(([x, y]) => ({X: Math.round(x / q), Y: Math.round(y / q)}));
+const pointInRings = (x, y, rings) => {
+    let inside = false;
+    for (const r of rings)
+        for (let i = 0, j = r.length - 1; i < r.length; j = i++) {
+            const a = r[i], b = r[j];
+            if ((a.Y > y) !== (b.Y > y) && x < (b.X - a.X) * (y - a.Y) / (b.Y - a.Y) + a.X) inside = !inside;
+        }
+    return inside;
+};
+const render = (svg, extra = {}) => new SvgRenderer(svg, {q: 0.001, tolerance: 0.01, pxPerUnit: 10, lineMaxPx: 0, ...extra});
+const fillsOf = ops => ops.filter(o => o.kind === 'fill');
+const areaUnits = (paths, q = 0.001) => P.area(paths) * q * q;
+
+test('XML: entities from the DOCTYPE, CDATA, comments and namespace prefixes', () => {
+    const root = parseXml(`<?xml version="1.0"?>
+<!DOCTYPE svg [ <!ENTITY ns_svg "http://www.w3.org/2000/svg"> <!ENTITY c "#ff0000"> ]>
+<!-- comment -->
+<svg:svg xmlns:svg="&ns_svg;" viewBox="0 0 10 10"><svg:style><![CDATA[ .a { fill: blue } ]]></svg:style>
+<svg:rect fill="&c;" title="a &amp; b &#x41;" width='1'/></svg:svg>`);
+    assert.equal(root.name, 'svg');
+    assert.equal(root.attrs['xmlns:svg'], 'http://www.w3.org/2000/svg');
+    const rect = root.children.find(c => c.name === 'rect');
+    assert.equal(rect.attrs.fill, '#ff0000');
+    assert.equal(rect.attrs.title, 'a & b A');
+    assert.equal(rect.attrs.width, '1');
+    assert.throws(() => parseXml('<html></html>'), /No <svg>/);
+});
+
+test('colours: names, hex, rgb, hsl, transparency', () => {
+    assert.deepEqual(parseColor('#f00'), {r: 1, g: 0, b: 0, a: 1});
+    assert.deepEqual(parseColor('RebeccaPurple'), parseColor('#663399'));
+    assert.deepEqual(parseColor('rgba(255, 0, 0, 0.5)'), {r: 1, g: 0, b: 0, a: 0.5});
+    assert.deepEqual(parseColor('rgb(100% 0% 0% / 25%)'), {r: 1, g: 0, b: 0, a: 0.25});
+    const hsl = parseColor('hsl(120, 100%, 25%)');
+    assert.ok(Math.abs(hsl.g - 0.5) < 1e-9 && hsl.r === 0 && hsl.b === 0);
+    assert.equal(parseColor('currentColor'), 'currentColor');
+    assert.equal(parseColor('nonsense'), null);
+    assert.equal(parseColor('#12345'), null);
+});
+
+test('path data: relative and implicit commands, smooth curves, compact arc flags, errors', () => {
+    const {subpaths, error} = parsePath('m10 10 20 0v10h-20z M0 0 c1 1 2 1 3 0 s2 -1 3 0 a2 2 0 0110 0 L1e1 5');
+    assert.equal(error, null);
+    assert.equal(subpaths.length, 2);
+    const [a, b] = subpaths;
+    assert.deepEqual([a.x, a.y, a.closed], [10, 10, true]);
+    assert.deepEqual(a.segs.map(s => [s.x, s.y]), [[30, 10], [30, 20], [10, 20]]);
+    // The S command reflects the previous control point.
+    assert.deepEqual([b.segs[1].x1, b.segs[1].y1], [4, -1]);
+    // The arc ends where it should; L1e1 reads the exponent.
+    const arcEnd = b.segs[b.segs.length - 2];
+    assert.ok(Math.abs(arcEnd.x - 16) < 1e-9 && Math.abs(arcEnd.y) < 1e-9);
+    assert.deepEqual([b.segs.at(-1).x, b.segs.at(-1).y], [10, 5]);
+    const bad = parsePath('M0 0 L10 0 L10 x10');
+    assert.match(bad.error, /expected a number/);
+    assert.equal(bad.subpaths[0].segs.length, 1);
+});
+
+test('transforms compose like SVG', () => {
+    const m = parseTransform('translate(10,20) rotate(90) scale(2)');
+    const [x, y] = apply(m, 1, 0);
+    assert.ok(Math.abs(x - 10) < 1e-9 && Math.abs(y - 22) < 1e-9);
+    const r = parseTransform('rotate(180 5 5)');
+    assert.deepEqual(apply(r, 0, 0).map(v => Math.round(v)), [10, 10]);
+    assert.deepEqual(apply(parseTransform('skewX(45)'), 0, 1).map(v => Math.round(v * 1e9) / 1e9), [1, 1]);
+});
+
+test('lengths and units', () => {
+    assert.equal(parseLength('2in'), 192);
+    assert.equal(parseLength('50%', 300), 150);
+    assert.equal(parseLength('1.5em', 0, 10), 15);
+    assert.ok(Number.isNaN(parseLength('auto')));
+});
+
+test('style cascade: presentation attribute < stylesheet < style attribute < !important', () => {
+    const colorOf = svg => fillsOf(render(svg).render())[0].paint.color;
+    const base = (css, attrs) => `<svg viewBox="0 0 10 10"><style>${css}</style><rect width="5" height="5" class="a" id="b" ${attrs}/></svg>`;
+    assert.deepEqual(colorOf(base('rect{fill:green}', 'fill="red"')), parseColor('green'));
+    assert.deepEqual(colorOf(base('rect{fill:green} .a{fill:blue}', 'fill="red"')), parseColor('blue'));
+    assert.deepEqual(colorOf(base('#b{fill:navy} .a{fill:blue}', '')), parseColor('navy'));
+    assert.deepEqual(colorOf(base('.a{fill:blue}', 'style="fill:purple"')), parseColor('purple'));
+    assert.deepEqual(colorOf(base('.a{fill:blue !important}', 'style="fill:purple"')), parseColor('blue'));
+    assert.deepEqual(colorOf(base('g > rect{fill:red}', '')), parseColor('black'));     // not a child of a g
+    // Inheritance, inherit and currentColor.
+    const inherited = `<svg viewBox="0 0 10 10"><g fill="orange" color="teal"><rect width="1" height="1"/>
+        <rect width="1" height="1" fill="currentColor"/><g fill="red"><rect width="1" height="1" fill="inherit"/></g></g></svg>`;
+    assert.deepEqual(fillsOf(render(inherited).render()).map(o => o.paint.color),
+        [parseColor('orange'), parseColor('teal'), parseColor('red')]);
+});
+
+test('region inequality: negative exactly inside, a distance near edges, no exponents', () => {
+    const q = 0.001;
+    // A square with a triangular hole, and an island inside the hole.
+    const rings = [ring(q, [0, 0], [4, 0], [4, 3], [0, 3]), ring(q, [1, 1], [2, 2], [3, 1]), ring(q, [1.8, 1.2], [2.2, 1.2], [2, 1.5])];
+    const expr = regionExpression(rings, q);
+    assert.match(expr, /^cos\(pi\*\(.*\)\)\/sqrt\(.*\)<0$/);
+    assert.doesNotMatch(expr, /\^|e-\d|pow/);
+    const f = evaluator(expr);
+    let checked = 0;
+    for (let i = 0; i < 4000; i++) {
+        const x = -1 + Math.random() * 6, y = -1 + Math.random() * 5;
+        const inside = pointInRings(x / q, y / q, rings);
+        assert.equal(f(x, y) < 0, inside, `(${x}, ${y})`);
+        checked++;
+    }
+    // Rays through vertices (y exactly 1 or 3) and points on vertex columns.
+    for (const [x, y, inside] of [[0.5, 1, true], [2, 1.1, false], [3.5, 1, true], [2, 2.5, true], [5, 1, false], [-1, 3, false], [2, 1.3, true], [2.5, 0.5, true]])
+        assert.equal(f(x, y) < 0, inside, `(${x}, ${y})`);
+    assert.ok(Math.abs(f(2, 2)) < 1e-12, 'zero on a vertex');
+    // sqrt(2) times the distance to a single nearby edge; near a corner the two edges combine
+    // as 1/sqrt(1/q1 + 1/q2) (0.1 from both edges here); 0 on the boundary.
+    assert.ok(Math.abs(f(4.05, 2) - Math.SQRT2 * 0.05) < 0.002, `outside the right edge: ${f(4.05, 2)}`);
+    assert.ok(Math.abs(f(0.1, 2.9) + 0.1) < 0.002, `near the corner: ${f(0.1, 2.9)}`);
+    assert.ok(Math.abs(f(4, 2)) < 1e-12);
+    assert.ok(Math.abs(f(1.5, 1.5)) < 1e-9, 'zero on a slanted hole edge');
+    assert.ok(checked > 0);
+});
+
+test('line equations change sign across the lines, and their cuts avoid the lines', () => {
+    const q = 0.001;
+    // A zigzag whose end lies level with its other vertices, a closed loop and a hook.
+    const zig = [[-4, -1], [-2, 1], [0, -1], [2, 1], [3.5, -0.5]];
+    const loop = [[5, 0], [7, 0], [7, 2], [5, 2]];
+    const hook = [[0, 3], [3, 3], [3, 5], [1, 5], [1, 4]];
+    const toInt = pts => pts.map(([x, y]) => [Math.round(x / q), Math.round(y / q)]);
+    const lines = [{points: toInt(zig), closed: false}, {points: toInt(loop), closed: true}, {points: toInt(hook), closed: false}];
+    const entries = planLines(lines, {clearance: 0.2 / q, reach: 50 / q, maxEdges: 400});
+    for (const entry of entries) {
+        const f = evaluator(lineEquation(entry.map(l => ({...l, path: l.points.map(([X, Y]) => ({X, Y}))})), q));
+        for (const line of entry) {
+            const pts = line.points.map(([X, Y]) => [X * q, Y * q]);
+            const n = line.closed ? pts.length : pts.length - 1;
+            for (let i = 0; i < n; i++) {
+                const [ax, ay] = pts[i], [bx, by] = pts[(i + 1) % pts.length];
+                for (const t of [0.2, 0.5, 0.8]) {
+                    const mx = ax + (bx - ax) * t, my = ay + (by - ay) * t;
+                    const len = Math.hypot(bx - ax, by - ay), nx = -(by - ay) / len * 0.02, ny = (bx - ax) / len * 0.02;
+                    const s1 = f(mx + nx, my + ny), s2 = f(mx - nx, my - ny);
+                    assert.ok(Math.sign(s1) !== Math.sign(s2), `sign change across ${line.closed ? 'loop' : 'line'} segment ${i}`);
+                    assert.ok(Math.abs(s1) < 0.05 && Math.abs(s2) < 0.05);
+                }
+            }
+        }
+    }
+    assert.ok(entries.flat().every(l => l.closed || l.dir));
+});
+
+test('opaque paint cuts what lies beneath; translucent paint blends; same colours merge', () => {
+    const svg = `<svg viewBox="0 0 10 10">
+        <rect width="6" height="6" fill="#ff0000"/>
+        <rect x="3" y="3" width="6" height="6" fill="#0000ff"/>
+        <rect x="2" y="7" width="2" height="2" fill="#0000ff"/>
+        <rect x="4" y="0" width="5" height="2" fill="#00ff00" fill-opacity="0.5"/>
+    </svg>`;
+    const r = render(svg);
+    const {pieces} = flattenOps(r.render(), {q: 0.001, tolerance: 0.01});
+    // Pieces never overlap.
+    const total = pieces.reduce((s, p) => s + areaUnits(p.paths), 0);
+    const union = areaUnits(P.normalize(pieces.flatMap(p => p.paths)));
+    assert.ok(Math.abs(total - union) < 1e-6, `${total} vs ${union}`);
+    const byHex = hex => pieces.filter(p => p.color.a === 1 && ['r', 'g', 'b'].every((k, i) => Math.round(p.color[k] * 255) === parseInt(hex.slice(1 + 2 * i, 3 + 2 * i), 16)));
+    assert.ok(Math.abs(byHex('#ff0000').reduce((s, p) => s + areaUnits(p.paths), 0) - (36 - 9 - 4)) < 1e-6);
+    assert.equal(byHex('#0000ff').length, 1, 'the two blue rects form one piece');
+    // Half-transparent green over red, and over nothing.
+    const blended = pieces.find(p => p.color.a === 1 && Math.abs(p.color.r - 0.5) < 0.01 && Math.abs(p.color.g - 0.5) < 0.01);
+    assert.ok(blended && Math.abs(areaUnits(blended.paths) - 4) < 1e-6);
+    const alone = pieces.find(p => p.color.a === 0.5);
+    assert.ok(alone && Math.abs(areaUnits(alone.paths) - 6) < 1e-6);
+});
+
+test('colours as Arch shows them on its white canvas', () => {
+    assert.equal(displayColor({r: 1, g: 1, b: 1, a: 1}), null);
+    assert.deepEqual(displayColor({r: 1, g: 0, b: 0, a: 1}), {color: {r: 1, g: 0, b: 0, a: 1}, hex: '#ff0000', opacity: 1});
+    // Light grey would be dimmed by Arch: drawn as translucent black that looks the same over white.
+    const grey = displayColor(parseColor('#f0f0f0'));
+    assert.equal(grey.hex, '#000000');
+    assert.ok(Math.abs(grey.opacity - 15 / 255) < 0.001);
+    assert.equal(archDimsColor(parseColor('#f0f0f0')), true);
+    assert.equal(archDimsColor(grey.color), false);
+    // Half-transparent blue over nothing is composited over white.
+    assert.equal(displayColor({r: 0, g: 0, b: 1, a: 0.5}).hex, '#8080ff');
+});
+
+test('gradients become bands of solid colour covering the shape', () => {
+    const svg = `<svg viewBox="0 0 100 10"><linearGradient id="g"><stop offset="0" stop-color="#000"/><stop offset="1" stop-color="#fff"/></linearGradient>
+        <rect width="100" height="10" fill="url(#g)"/></svg>`;
+    const [op] = render(svg).render();
+    assert.equal(op.paint.type, 'linear');
+    const bands = gradientBands(op.paths, op.paint, {q: 0.001, tolerance: 0.01, steps: 10});
+    assert.equal(bands.length, 10);
+    const total = bands.reduce((s, b) => s + areaUnits(b.paths), 0);
+    assert.ok(Math.abs(total - 1000) < 1e-3);
+    for (let i = 1; i < bands.length; i++) assert.ok(bands[i].color.r > bands[i - 1].color.r, 'brightens left to right');
+    // Bands stay at least minBandPx wide on screen.
+    assert.equal(gradientBands(op.paths, op.paint, {q: 0.001, tolerance: 0.01, steps: 10, pxPerUnit: 1, minBandPx: 25}).length, 4);
+    // A radial gradient gives rings.
+    const radial = `<svg viewBox="0 0 10 10"><radialGradient id="r"><stop offset="0" stop-color="red"/><stop offset="1" stop-color="blue"/></radialGradient>
+        <circle cx="5" cy="5" r="5" fill="url(#r)"/></svg>`;
+    const [rop] = render(radial).render();
+    const rings = gradientBands(rop.paths, rop.paint, {q: 0.001, tolerance: 0.001, steps: 5}).filter(b => areaUnits(b.paths) > 0.01);
+    assert.equal(rings.length, 5);
+    assert.ok(Math.abs(rings.reduce((s, b) => s + areaUnits(b.paths), 0) - areaUnits(rop.paths)) < 0.01);
+});
+
+test('strokes: outlines with caps and joins, dashes, and thin strokes as lines', () => {
+    const svg = `<svg viewBox="0 0 100 100"><path d="M10 10 H90" stroke="black" stroke-width="4"/>
+        <path d="M10 50 H90" stroke="black" stroke-width="4" stroke-linecap="square" stroke-dasharray="10 10"/>
+        <path d="M10 80 H90" stroke="black" stroke-width="0.2"/></svg>`;
+    const ops = render(svg, {lineMaxPx: 5}).render();
+    assert.deepEqual(ops.map(o => o.kind), ['fill', 'fill', 'line']);
+    assert.ok(Math.abs(areaUnits(ops[0].paths) - 320) < 0.5, `butt line ${areaUnits(ops[0].paths)}`);
+    // Four dashes of 10, each extended by 2 at both ends (square caps).
+    assert.ok(Math.abs(areaUnits(ops[1].paths) - 4 * 14 * 4) < 0.5, `dashes ${areaUnits(ops[1].paths)}`);
+    assert.equal(ops[1].paths.length, 4);
+    assert.equal(ops[2].widthPx, 0.2 * 10);
+});
+
+test('clip paths, nested viewports, use and symbol', () => {
+    const svg = `<svg viewBox="0 0 100 100">
+        <clipPath id="c"><circle cx="50" cy="50" r="10"/></clipPath>
+        <symbol id="s" viewBox="0 0 10 10"><rect width="10" height="10"/></symbol>
+        <rect width="100" height="100" fill="red" clip-path="url(#c)"/>
+        <use href="#s" x="0" y="0" width="20" height="20" fill="blue"/>
+        <svg x="80" y="80" width="10" height="10" viewBox="0 0 1 1"><rect width="2" height="2" fill="green"/></svg>
+        <rect id="r" width="5" height="5"/><use xlink:href="#r" x="30" fill="orange" xmlns:xlink="http://www.w3.org/1999/xlink"/>
+    </svg>`;
+    const ops = render(svg).render();
+    assert.ok(Math.abs(areaUnits(ops[0].paths) - Math.PI * 100) < 0.5);
+    assert.deepEqual(ops[1].paint.color, parseColor('blue'));
+    assert.ok(Math.abs(areaUnits(ops[1].paths) - 400) < 1e-6);
+    assert.ok(Math.abs(areaUnits(ops[2].paths) - 100) < 1e-6, 'nested svg clips to its viewport');
+    const box = P.bbox(ops[4].paths);
+    assert.deepEqual([box.minX, box.maxX], [30000, 35000]);
+});
+
+test('everything outside the root viewBox is clipped; hidden things are not drawn', () => {
+    const ops = render(`<svg viewBox="0 0 10 10"><rect x="-5" y="-5" width="10" height="10"/>
+        <rect width="3" height="3" display="none"/><g visibility="hidden"><rect width="3" height="3"/></g>
+        <rect width="3" height="3" fill="none"/><rect width="3" height="3" opacity="0"/></svg>`).render();
+    assert.equal(ops.length, 1);
+    assert.ok(Math.abs(areaUnits(ops[0].paths) - 25) < 1e-6);
+});
+
+test('quantum formatting and numbers are exact and never use exponents', () => {
+    const f = quantumFormatter(0.001);
+    assert.equal(f(12345), '12.345');
+    assert.equal(f(-5), '-0.005');
+    assert.equal(f(1000), '1');
+    assert.equal(f(0), '0');
+    assert.equal(quantumFormatter(10)(7), '70');
+    assert.equal(fmt(0.0000123456789), '0.0000123457');
+    assert.equal(fmt(-1234567.89), '-1234568');
+});
+
+test('convertSvg writes a scene script the parser accepts', () => {
+    const svg = readFileSync(new URL('../examples/svg/lighthouse.svg', import.meta.url), 'utf8');
+    const {script, stats, warnings, info} = convertSvg(svg);
+    const {steps, title} = parseScript(script);
+    assert.equal(title, 'Lighthouse at dusk');
+    assert.equal(steps.filter(s => s.kind === 'create').length, stats.entries);
+    assert.ok(stats.regions > 20 && stats.lineEntries > 0 && stats.texts === 1);
+    const settings = steps.find(s => s.kind === 'set').settings;
+    assert.deepEqual(settings.map(s => s.name), ['implicitPrecision', 'showAxes', 'showAxisNumbers', 'gridStyle', 'autoBreakpointDetection']);
+    assert.ok(info.some(i => /filters are ignored/.test(i)));
+    assert.ok(Array.isArray(warnings));
+    // Every region is a strict inequality (fill only, no outline) with an explicit opacity.
+    const regions = steps.filter(s => s.kind === 'create' && s.expr.startsWith('cos(pi*'));
+    assert.ok(regions.every(s => /<0$|=0$/.test(s.expr) && s.style.color));
+    assert.throws(() => convertSvg(svg, {precision: 50}), /precision/);
+});
+
+test('an SVG without viewBox or size is framed around its content', () => {
+    const {stats, script} = convertSvg('<svg><rect x="100" y="50" width="20" height="10" fill="red"/></svg>');
+    assert.deepEqual(stats.viewBox, {x: 100, y: 50, width: 20, height: 10});
+    assert.match(script, /@view x=99\.2\.\.120\.8 y=-60\.4\.\.-49\.6/);
+});

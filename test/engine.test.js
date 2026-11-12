@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import {readFileSync, readdirSync} from 'node:fs';
 import {ArchEngine} from '../src/engine.js';
 import {decompile} from '../src/decompile.js';
+import {convertSvg} from '../src/svg/index.js';
 
 const engine = new ArchEngine({keepWarm: true});
 after(() => engine.close());
@@ -209,4 +210,23 @@ test('t can name a variable or an operator (Arch 12201+)', async () => {
     const result = await engine.run('t=2\ny=t*x\n@operator twice(t)\n  return 2 * t;\n@end\ny=twice(x)', {screenshot: false});
     assert.deepEqual(result.errors, []);
     assert.equal(byName(result, 't').value, 2);
+});
+
+test('an SVG drawing converts to inequality regions that build and reload identically', async () => {
+    const svg = readFileSync(new URL('../examples/svg/lighthouse.svg', import.meta.url), 'utf8');
+    const conversion = convertSvg(svg);
+    const result = await engine.run(conversion.script, {screenshot: false, timeoutMs: 120000});
+    assert.deepEqual(result.errors, []);
+    assert.deepEqual(result.warnings, []);
+    assert.ok(result.ok);
+    const state = JSON.parse(result.json);
+    assert.equal(state.entries.length, conversion.stats.entries);
+    const regions = state.entries.filter(e => e.plotType === 'implicit' && e.sign === '<');
+    const lines = state.entries.filter(e => e.plotType === 'implicit' && e.sign === '=');
+    assert.equal(regions.length + lines.length + conversion.stats.seamEntries, state.entries.length);
+    assert.ok(lines.length > 0 && regions.every(e => e.color.a === 0 || e.color.a > 50), 'opaque fills, or near-white ink that is mostly transparent');
+    assert.equal(state.name, 'Lighthouse at dusk');
+    assert.deepEqual([state.showAxes, state.gridStyle, state.implicitPrecisionStep, state.autoBreakpointDetectionEnabled], [false, 'hidden', 5, true]);
+    assert.equal(state.annotations.filter(a => a.type === 'text').length, 1);
+    assert.match(decompile(result.json).script, /^@set .*autoBreakpointDetection=true/m);
 });
