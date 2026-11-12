@@ -86,7 +86,7 @@ function guard(promise, ms, what) {
     let timer;
     const timeout = new Promise((_, reject) => {
         timer = setTimeout(() => reject(new RunTimeout(
-            `${what} did not finish within ${ms / 1000} s; a JavaScript operator or @script may loop forever.`)), ms);
+            `${what} did not finish within ${ms / 1000} s; a JavaScript operator or @script may loop forever, or the scene needs more time (CLI: --timeout).`)), ms);
     });
     return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }

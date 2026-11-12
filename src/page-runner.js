@@ -266,7 +266,7 @@ export async function runSteps({steps, title, script, messages = []}) {
     };
 
     const setStep = async step => {
-        const list = step.settings.map(s => ['tmin', 'tmax'].includes(s.name) ? {...s, value: evalNumber(s.value, s.name)} : s);
+        const list = step.settings.map(s => ['tmin', 'tmax', 'implicitPrecision'].includes(s.name) ? {...s, value: evalNumber(s.value, s.name)} : s);
         // Order tmin/tmax so the intermediate state always has tmin < tmax.
         const tmin = list.find(s => s.name === 'tmin'), tmax = list.find(s => s.name === 'tmax');
         if (tmin && tmax && tmin.value >= e.tmax) list.sort((a, b) => (a.name === 'tmax' ? -1 : 0) - (b.name === 'tmax' ? -1 : 0));

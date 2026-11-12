@@ -186,6 +186,13 @@ test('parametric curves and surfaces with their own parameters (Arch 12201+)', a
     assert.match(again, /@view 3d .*center=0,0,1\.5/);
 });
 
+test('implicitPrecision reaches the save file and decompiles back', async () => {
+    const result = await engine.run('surface(sin(u)*cos(v),sin(u)*sin(v),cos(u),u,0,pi,v,0,2*pi) | ref=ball\n@view 3d\n@set implicitPrecision=10', {screenshot: false});
+    assert.deepEqual(result.errors, []);
+    assert.equal(JSON.parse(result.json).implicitPrecisionStep, 2);
+    assert.match(decompile(result.json).script, /^@set .*implicitPrecision=10$/m);
+});
+
 test('unreadable lines and empty parameter ranges are reported', async () => {
     const bad = await engine.run('y=2x+\n(cos(u),sin(u),u,0,u)\ncurve(cos(u),sin(u),u,0,1,v,0,1)', {screenshot: false});
     assert.deepEqual(bad.errors.map(e => e.line), [1, 2, 3]);

@@ -127,7 +127,7 @@ setInterval(() => arch.valuesetting('a', Math.random()), 500);
 @end
 ```
 
-Full details, including an `arch.*` API reference, are in [docs/GUIDE.md](docs/GUIDE.md). There are more examples in `examples/` (`js-frames-text.arch` uses all of the above, `parametric-surfaces.arch` the parametric forms).
+Full details, including an `arch.*` API reference, are in [docs/GUIDE.md](docs/GUIDE.md). There are more examples in `examples/` (`js-frames-text.arch` uses all of the above, `parametric-surfaces.arch` the parametric forms), and `examples/claude-chan/` is a detailed 3D figure built from parametric surfaces by a small generator script.
 
 CLI:
 
@@ -136,6 +136,7 @@ node src/cli.js examples/circle-motion.arch                 # writes examples/ci
 node src/cli.js --check scene.arch --png shot.png           # validate + screenshot, no file
 node src/cli.js --check scene.arch --png s.png --png-scale 0.5  # 640x400 screenshot
 node src/cli.js scene.arch -o out.txt --brief               # report only status, errors, warnings
+node src/cli.js big-3d-scene.arch --timeout 300              # allow each step up to 300 s (default 30)
 node src/cli.js --decompile "My graph.txt" -o mygraph.arch  # save file -> script
 node src/cli.js --guide                                     # print the guide
 node src/cli.js --guide geometry,animation                  # print only these topics

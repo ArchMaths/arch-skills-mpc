@@ -57,7 +57,7 @@ Animation speed: Arch advances about `100*step` per second. For a span L in T se
 
 - `@title Name`: file name shown in Arch.
 - `@view x=a..b y=c..d`: fit this region (2D). Or `@view center=x,y unit=N` (N = pixels per unit). For 3D: `@view 3d azimuth=35 elevation=25` (degrees), plus `unit=N` to zoom and `center=x,y,z` to move the 3D box so it is centred on that point (z is Arch's z shift; use it instead of moving every object). `@view 2d` switches back.
-- `@set name=value ...`: saved document settings only: `showAxes`, `showAxisNumbers`, `showPointLabels` (true/false), `gridStyle` (`grid|dots|polar|hidden`), `tmin`, `tmax` (parametric t range, default -2*pi..2*pi), `geometryMeasurementDisplay`, `showHiddenMath`, `showHiddenGeo`.
+- `@set name=value ...`: saved document settings only: `showAxes`, `showAxisNumbers`, `showPointLabels` (true/false), `gridStyle` (`grid|dots|polar|hidden`), `tmin`, `tmax` (parametric t range, default -2*pi..2*pi), `geometryMeasurementDisplay`, `showHiddenMath`, `showHiddenGeo`, `implicitPrecision` (0.5..20, default 4: how finely implicit 3D and parametric surfaces are meshed; a parametric surface gets 12.5×value grid steps per side, at most 240, so 12 gives about 150 instead of 50; higher values look smoother but take longer to draw).
 - `@style target | options`: restyle an existing object by name, ref, auto-number, or `last`.
 - `@text x=.. y=.. [size=] [color=] [width=] [height=] [smart|plain] | content`: canvas text box (see below).
 - `@frames total=N fps=F [current=K] [bind=expr]`: turn on frame-by-frame playback (see below).
@@ -115,7 +115,8 @@ A parametric object can declare its own parameters, each with a range. Three spe
 - The coordinates come first (x, y and, for 3D, z), then `name,min,max` for each parameter: one for a curve, two for a surface. A tuple therefore has 2, 3, 5, 6 or 9 items; with 2 or 3 items it is a curve in the global `t`.
 - Parameter names are local to their line: any plain name except `x y z e pi`, built-in functions and `sum prod int diff diffat`. They hide variables or refs with the same name on that line only. The two parameters of a surface need different names.
 - Ranges may use variables and sliders (`u,0,2*pi*a`), but not the line's own parameters. Each range needs min < max; otherwise the object is not drawn and the report warns.
-- Parametric surfaces are meshed at Arch's *equation, inequality and parametric surface precision* (the same setting as implicit 3D surfaces). Write them in plain math, not with `@operator` functions (see below).
+- Parametric surfaces are meshed at Arch's *equation, inequality and parametric surface precision* (the same setting as implicit 3D surfaces; `@set implicitPrecision=12` saves a finer mesh in the file). Write them in plain math, not with `@operator` functions (see below).
+- Arch lights a surface at half strength where its normal points away from the camera, so give closed surfaces outward normals. Swapping the two parameter ranges (`(X,Y,Z,v,v0,v1,u,u0,u1)`) flips a surface that looks dim.
 - Examples: torus `((2+0.6*cos(v))*cos(u),(2+0.6*cos(v))*sin(u),0.6*sin(v),u,0,2*pi,v,0,2*pi)`; Moebius strip `x=(1+s*cos(w/2))*cos(w),y=(1+s*cos(w/2))*sin(w),z=s*sin(w/2){w,0,2*pi,s,-0.4,0.4}`.
 
 ### Geometry commands (2D). The new object's name is always the first argument.
@@ -280,6 +281,7 @@ Calls marked *(async)* take effect on the next tick, so do not read their result
 11. `frame=` without an `@frames` line (it has no effect), or expecting frame 0 to hide framed objects.
 12. `arch.createfunc(...)` without `visible` = 1, or `valuesetting` with min and max swapped.
 13. Creating objects inside `@script` that the scene script already creates (duplicates on every Run).
-14. Writing a parametric range that uses its own parameter (`(cos(u),sin(u),u,0,u)`), or one with min ≥ max.
-15. Calling an `@operator` inside a 3D surface: it works, but meshing becomes very slow.
-16. Arch bug: `length(...)` and `angle(...)` labels are not drawn if a measured point is created after any curve, equation or point list, or is the built-in `O`. Create the measured points first and use `point(O,0,0)` rather than the built-in origin.
+14. User-function parameters are case-insensitive too (`f(r,R)=...` clashes), and `e`, `x`, `y`, `z` cannot be parameter names; `max` and `min` take exactly two arguments (nest them).
+15. Writing a parametric range that uses its own parameter (`(cos(u),sin(u),u,0,u)`), or one with min ≥ max.
+16. Calling an `@operator` inside a 3D surface: it works, but meshing becomes very slow.
+17. Arch bug: `length(...)` and `angle(...)` labels are not drawn if a measured point is created after any curve, equation or point list, or is the built-in `O`. Create the measured points first and use `point(O,0,0)` rather than the built-in origin.

@@ -52,12 +52,14 @@ intersect(I,parab,c,1,1)
 - **`ref=name`**: Arch auto-numbers curves (`func1`, `eq2`, `para3`) and you can't predict the number, so give curves a ref and use it in later lines. Don't reuse an object name as a ref.
 - Other options: `color=` (`red orange yellow green teal cyan blue indigo purple pink brown black gray white`, `#rrggbb`, `hsb(h,s,b)`), `opacity=0..1`, `thickness=1..20`, `hidden`, `dash=solid|long|short|dotted`, `label=none|name|"text"`, `fixed`, `min= max= step=`, `mode=pingpong|forward|reverse|once|once-reverse`, `play`, `frame=N`.
 - Sliders: only a plain number literal gets one (`a=2`, not `a=2*pi`). Arch advances `100*step` per second, so `step = span/(100*seconds)`.
-- Directives: `@title`; `@view x=a..b y=c..d` (always add one) or `@view 3d azimuth=35 elevation=25 [unit=N] [center=x,y,z]`; `@set gridStyle=grid|dots|polar|hidden showAxes=false showAxisNumbers=false tmin= tmax=`; `@style <name|ref|last> | options`; `@text x= y= size= | content {value(a)}`; `@frames total=N fps=F`; `@operator f(a,b)` … `@end`; `@script` … `@end`.
+- Directives: `@title`; `@view x=a..b y=c..d` (always add one) or `@view 3d azimuth=35 elevation=25 [unit=N] [center=x,y,z]`; `@set gridStyle=grid|dots|polar|hidden showAxes=false showAxisNumbers=false tmin= tmax= implicitPrecision=N` (3D mesh fineness, default 4; 8 to 12 for detailed surfaces, slower to draw); `@style <name|ref|last> | options`; `@text x= y= size= | content {value(a)}`; `@frames total=N fps=F`; `@operator f(a,b)` … `@end`; `@script` … `@end`.
 
 ## Syntax essentials
 
 - **Names are case-insensitive**: `A` clashes with `a`, and `F` with a function `f`. Don't use `x y z e pi O Xaxis Yaxis`, built-in names, or `func1`-style names (`t` is allowed). An undefined single letter becomes an auto-created variable (warning), so define variables first.
 - Not supported: `%`, `!`, `|x|`, `&&`, `||`, `==`, `?:`, `**`, `1e-3`, chained or several relations per line. Use `abs()`, `gamma(n+1)`, `10^(-3)`.
+- User functions: parameter names are case-insensitive (`f(r,R)` clashes) and cannot be `e x y z`; `max`/`min` take two arguments.
+- 3D surfaces whose normals face away from the camera are drawn at half brightness; swap a surface's two parameter ranges to flip it. Large 3D scenes may need `--timeout 300`.
 - `log` is base 10, `ln` is natural. `sin`/`cos` use radians. `rotate` and `angle` use degrees.
 - Domain limits are **added**: `y=x^2+range(x,-2,2)`, `+llim(x,0)` (x≥0), `+ulim(x,4)` (x≤4).
 - Math objects: `y=…`/`x=…` explicit, `x^2+y^2=4` implicit, `y>x^2` region (one relation per line), `x=cos(t),y=sin(t)` parametric in the global t, `f(u)=u^2` callable but not drawn (draw it with `y=f(x)`), `b=2*a` dependent value. 3D, after `@view 3d`: `z=x^2+y^2`, `x^2+y^2+z^2=9`, `x=cos(t),y=sin(t),z=t`.
