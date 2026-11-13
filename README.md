@@ -176,6 +176,30 @@ How a picture becomes inequalities:
 
 The conversion reports parts thinner than the sampling grid (they may show gaps; use a higher `--precision` or zoom in), unsupported features, and the approximate redraw time. Arch redraws on every pan and zoom, so drawings with thousands of edges feel slow; `--tolerance 1` or fewer gradient steps help.
 
+## SVG on 3D surfaces (svgsurf, experimental)
+
+`src/svgsurf.js` wraps an SVG drawing onto a parametric surface, like a texture on a 3D model. It writes a scene script; build it with the CLI as usual.
+
+```sh
+node src/svgsurf.js examples/svg/badge.svg -o badge-sphere.arch --view "azimuth=15 elevation=15 unit=90"
+node src/svgsurf.js examples/svg/lighthouse.svg --surface torus --place=-0.65,0.65,-1.35,1.35 -o lighthouse-torus.arch --view "azimuth=0 elevation=12 unit=78"
+node src/svgsurf.js examples/svg/lighthouse.svg --surface wave --place=-2.7,2.7,-1.8,1.8 --base none -o lighthouse-wave.arch --view "azimuth=-90 elevation=40 unit=80"
+node src/svgsurf.js drawing.svg --surface "u;v;0.3*sin(u)*cos(v)" --domain=-3,3,-2,2   # any surface in u and v
+node src/cli.js badge-sphere.arch -o badge-sphere.txt --timeout 600
+```
+
+`--surface` takes a preset (`sphere`, `torus`, `cylinder`, `wave`) or `"X;Y;Z"` in `u` and `v` with `--domain u0,u1,v0,v1`. `--place u0,u1,vb,vt` is the texture mapping: the picture's left and right edges go to `u0` and `u1`, its bottom to `v = vb` and its top to `v = vt` (the sphere's default wraps it all the way round, equirectangular). `examples/svg/badge-sphere.*` and `examples/svg/lighthouse-torus.*` were made with the first two commands. Run `--help` for every option.
+
+How it works:
+
+- **Decals, not textures.** Arch's 3D shader gives each surface one flat colour, so every colour region of the picture becomes surfaces of its own. Hidden parts are cut away first (each shape loses what later opaque shapes cover), which leaves disjoint colour regions; opaque regions of one colour are merged.
+- **Exact strips.** Each region is cut into x-monotone strips. A strip is the patch `surface(S(U,V)+L*N(U,V),s,0,R,w,0,1)` with `U(s)` and `V(s,w) = lo(s)+w*(hi(s)-lo(s))` piecewise linear (`a+b*s+sum c*abs(s-k)`), their knots on Arch's mesh columns, so corners and straight edges are exact in (u, v). Arch meshes a parametric surface on R x R steps, R = floor(3.125 x implicitPrecision), at most 60 (25 at the default `--precision 8`); wide or tall strips are subdivided so no flat mesh cell sags into the layer beneath it.
+- **Lift.** Arch draws all 3D objects into one depth buffer, so a decal lying exactly on the surface would flicker against it. Each decal is lifted along the unit normal: about 0.1% of the surface's size per level. Neighbouring regions get different levels (a colouring of their adjacency graph, usually 3 or 4 levels), and each reaches a hair under its neighbours on higher levels, so no crack shows the surface between them. Translucent shapes go above the opaque ones and blend in Arch's ordered drawing.
+- **Normals.** The presets have closed-form unit normals; give one for your own surface with `--normal "NX;NY;NZ"`. Without it, Arch computes the normal by central differences, which works for any surface but makes the file several times bigger and slower to open (the `wave` example: about 10 MB, about a minute to check, against about 10 s for the torus).
+- **Orientation.** The tool samples the surface to find which side is outside and orders each patch's parameters so its normal faces out, because Arch draws surfaces facing away from the camera at half brightness.
+
+Limits: text is skipped, and images, filters, patterns and markers are not drawn (as in svg2arch). Every patch gets the same R x R mesh, so the cost grows with the number of strips (the lighthouse needs about 290 surfaces). Lowering the precision in Arch rounds corners a little. At grazing angles the lift can show. Keep the surface's size times `unit` in `@view` under about 300, or Arch's 3D box (±8 view units) clips the front of the surface.
+
 ## Configuration
 
 | Variable | Default |

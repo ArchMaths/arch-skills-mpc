@@ -6,7 +6,8 @@
   "bin": {
     "arch-build": "src/cli.js",
     "arch-mcp": "src/mcp.js",
-    "svg2arch": "src/svg2arch.js"
+    "svg2arch": "src/svg2arch.js",
+    "svgsurf": "src/svgsurf.js"
   },
   "scripts": {
     "test": "node --test --test-concurrency=1 test/*.test.js",
