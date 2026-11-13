@@ -11,6 +11,7 @@ import {regionExpression, lineEquation, quantumFormatter, fmt} from '../src/svg/
 import {planLines} from '../src/svg/lines.js';
 import {convertSvg} from '../src/svg/index.js';
 import {layerOps, fitLayer, archOver, archShown, CLEAR, nearestDrawable} from '../src/svg/layers.js';
+import {joinedRuns, outlineRuns, runCoverage, concaveCorners, toIntPaths} from '../src/svg/outline.js';
 import {parseScript} from '../src/script.js';
 import * as P from '../src/svg/poly.js';
 
@@ -289,19 +290,23 @@ test('convertSvg writes a scene script the parser accepts, in both modes', () =>
         assert.ok(stats.regions > 20 && stats.lineEntries > 0 && stats.texts === 1);
         assert.equal(stats.mode, flatten ? 'flatten' : 'ordered');
         const settings = steps.find(s => s.kind === 'set').settings;
-        assert.deepEqual(settings.map(s => s.name), ['implicitPrecision', 'showAxes', 'showAxisNumbers', 'gridStyle', 'autoBreakpointDetection',
-            ...(flatten ? [] : ['orderedDrawing'])]);
+        // Thin strokes are point lists in ordered mode, equations (with breakpoint detection) when flattening.
+        assert.deepEqual(settings.map(s => s.name), ['implicitPrecision', 'showAxes', 'showAxisNumbers', 'gridStyle',
+            ...(flatten ? ['autoBreakpointDetection'] : ['orderedDrawing'])]);
         assert.ok(info.some(i => /filters are ignored/.test(i)));
         assert.ok(Array.isArray(warnings));
         // Every region is a strict inequality (fill only, no outline) with an explicit opacity.
         const regions = steps.filter(s => s.kind === 'create' && s.expr.startsWith('cos(pi*'));
         assert.ok(regions.every(s => /<0$|=0$/.test(s.expr) && s.style.color));
-        // Ordered drawing needs no seam lines; the text box stays in painting order (last here).
+        // Ordered drawing needs no seam lines but outlines opaque shapes; the text box stays in
+        // painting order (last here).
         assert.equal(stats.seamEntries > 0, flatten);
+        assert.equal(stats.outlineEntries > 0, !flatten);
+        if (!flatten) assert.equal(steps.filter(s => s.kind === 'create' && s.expr.startsWith('/-/')).length, stats.outlineEntries + stats.lineEntries);
         if (!flatten) assert.equal(steps.findIndex(s => s.kind === 'text'), steps.findLastIndex(s => s.kind === 'create') + 1);
     }
     const ordered = convertSvg(svg).stats, flat = convertSvg(svg, {flatten: true}).stats;
-    assert.ok(ordered.entries < flat.entries / 2 && ordered.edges < 0.7 * flat.edges, `${JSON.stringify(ordered)} vs ${JSON.stringify(flat)}`);
+    assert.ok(ordered.entries < 0.6 * flat.entries && ordered.edges < 0.6 * flat.edges, `${JSON.stringify(ordered)} vs ${JSON.stringify(flat)}`);
     assert.throws(() => convertSvg(svg, {precision: 50}), /precision/);
 });
 
@@ -377,6 +382,55 @@ test("fitting translucent paint to Arch's blending", () => {
     const grey = {r: 0.9, g: 0.92, b: 0.95, a: 1};
     check(grey, [canvas], fitLayer(grey, [canvas]));
     assert.deepEqual(nearestDrawable({r: 1, g: 1, b: 1, a: 1}), {r: 0.85, g: 0.85, b: 0.85, a: 1});
+});
+
+test('point-list joins: segments reach the miter point, never past the other edge', () => {
+    // A right-angle turn: both segments reach half the width past the corner, closing the notch.
+    assert.deepEqual(joinedRuns([[0, 0], [1000, 0], [1000, 1000]], {half: 50}).map(run => run.map(p => p.map(Math.round))),
+        [[[0, 0], [1050, 0]], [[1000, -50], [1000, 1000]]]);
+    // A smooth curve stays one run; open ends get caps only when asked.
+    const arc = Array.from({length: 20}, (_, i) => [Math.round(1e4 * Math.cos(i / 40)), Math.round(1e4 * Math.sin(i / 40))]);
+    assert.equal(joinedRuns(arc, {half: 50, minGap: 5}).length, 1);
+    assert.deepEqual(joinedRuns([[0, 0], [100, 0]], {half: 10, caps: true})[0].map(p => p.map(Math.round)), [[-10, 0], [110, 0]]);
+    // What a point list paints along a star's outline stays inside the star and covers its edge band.
+    const star = [];
+    for (let i = 0; i < 10; i++) { const r = i % 2 ? 4000 : 10000, a = Math.PI / 2 + i * Math.PI / 5; star.push({X: Math.round(r * Math.cos(a)), Y: Math.round(r * Math.sin(a))}); }
+    const shape = P.normalize([star]), half = 400;
+    const cover = runCoverage(toIntPaths(outlineRuns(shape, half, 5)), half);
+    assert.ok(P.area(P.difference(cover, shape)) < 0.5 * half * half, 'nothing sticks out');
+    const band = P.difference(shape, P.offset(shape, -2 * half, 4));
+    assert.ok(P.area(P.difference(band, cover)) < 0.1 * P.area(band), 'the edge band is painted, except the sharpest tips');
+});
+
+test('concave corners are carved from the fill only where the outline paints them back', () => {
+    const shape = P.difference([[{X: 0, Y: 0}, {X: 20000, Y: 0}, {X: 20000, Y: 20000}, {X: 0, Y: 20000}]],
+        [[{X: 5000, Y: 5000}, {X: 5000, Y: 15000}, {X: 15000, Y: 15000}, {X: 15000, Y: 5000}]]);
+    const half = 750, cover = runCoverage(toIntPaths(outlineRuns(shape, half, 37)), half);
+    const carve = concaveCorners(shape, 1.9 * half, cover);
+    assert.equal(P.components(carve).length, 4, 'the hole has four concave corners');
+    assert.ok(P.area(P.difference(carve, cover)) < 1e-6 * P.area(carve), 'all within the outline');
+    const fill = P.difference(shape, carve);
+    // No concave corner of the carved fill lies on the true outline (where Arch would round it outwards).
+    const onOutline = (X, Y) => [5000, 15000].includes(X) && Y >= 5000 && Y <= 15000 || [5000, 15000].includes(Y) && X >= 5000 && X <= 15000;
+    for (const ring of fill)
+        ring.forEach((v, i) => {
+            const a = ring[(i - 1 + ring.length) % ring.length], b = ring[(i + 1) % ring.length];
+            const cross = (v.X - a.X) * (b.Y - v.Y) - (v.Y - a.Y) * (b.X - v.X);
+            if (cross < 0) assert.ok(!onOutline(v.X, v.Y), `concave vertex on the outline at ${v.X},${v.Y}`);
+        });
+    // Corners that later shapes hide are left alone.
+    assert.deepEqual(concaveCorners(shape, 1.9 * half, cover, () => true), []);
+});
+
+test('a shape with many holes is tiled into entries under the edge limit', () => {
+    let holes = '';
+    for (let i = 0; i < 20; i++) for (let j = 0; j < 10; j++) holes += `<rect x="${5 + i * 10}" y="${5 + j * 10}" width="4" height="4" fill="#fff"/>`;
+    const svg = `<svg viewBox="0 0 210 110"><rect width="210" height="110" fill="#1e88e5"/>${holes}</svg>`;
+    const {script, stats} = convertSvg(svg, {maxEdges: 200});
+    const fills = parseScript(script).steps.filter(s => s.kind === 'create' && s.expr.startsWith('cos('));
+    assert.ok(fills.length > 4, `${fills.length} entries`);
+    for (const f of fills) assert.ok((f.expr.match(/heaviside\(/g) || []).length / 3 <= 200 + 8);
+    assert.ok(stats.edges >= 4 + 200 * 4);
 });
 
 test('layered gradient bands reach under the next band and cover the shape', () => {

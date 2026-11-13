@@ -109,7 +109,7 @@ server.registerTool('arch_build', {
 
 server.registerTool('arch_svg', {
     title: 'Convert an SVG drawing to an Arch save file',
-    description: 'Converts an SVG file into an Arch 2D save file: every filled shape becomes a signed-distance inequality, stacked in the SVG\'s painting order with Arch\'s ordered drawing (Arch 12202+), thin strokes become lines and text becomes text boxes; filters are ignored. Writes the scene script (.arch, editable and rebuildable with arch_build) and the save file, after running both in the real Arch engine. Returns a conversion summary (layers, edges, approximate redraw time, unsupported features), the build report and a screenshot.',
+    description: 'Converts an SVG file into an Arch 2D save file: every filled shape becomes a signed-distance inequality, stacked in the SVG\'s painting order with Arch\'s ordered drawing (Arch 12202+) and traced with an exact point-list outline; thin strokes become point lists and text becomes text boxes; filters are ignored. Writes the scene script (.arch, editable and rebuildable with arch_build) and the save file, after running both in the real Arch engine. Returns a conversion summary (layers, edges, approximate redraw time, unsupported features), the build report and a screenshot.',
     inputSchema: {
         svg_path: z.string().optional().describe('Path to the .svg file.'),
         svg: z.string().optional().describe('SVG markup, instead of svg_path.'),
@@ -121,6 +121,7 @@ server.registerTool('arch_svg', {
         gradient_steps: z.number().int().min(1).max(64).optional().describe(`At most this many colour bands per gradient (default ${SVG_DEFAULTS.gradientSteps}; fewer when its colours are close; 1 uses the average colour).`),
         title: z.string().optional().describe('File name shown in Arch (default: the SVG <title>).'),
         axes: z.boolean().optional().describe('Keep Arch axes and grid visible (default false).'),
+        outlines: z.boolean().optional().describe('Trace each opaque shape with an exact point list half a line width inside it, for sharp edges and corners (default true). false gives fewer entries; Arch\'s sampling then rounds corners by a few pixels.'),
         flatten: z.boolean().optional().describe('For Arch builds before 12202, which have no ordered drawing: cut the picture into non-overlapping colour regions with seam lines between them (default false). More edges, and small notches where regions meet.'),
         screenshot: z.boolean().optional().describe('Include a screenshot (default true).'),
         screenshot_scale: z.number().min(0.1).max(1).optional().describe('Screenshot scale (default 1 = 1280x800).')
@@ -131,7 +132,7 @@ server.registerTool('arch_svg', {
     let conversion;
     try {
         conversion = convertSvg(args.svg ?? readFileSync(abs(args.svg_path), 'utf8'), {
-            tolerance: args.tolerance, precision: args.precision, gradientSteps: args.gradient_steps, title: args.title, axes: args.axes, flatten: args.flatten
+            tolerance: args.tolerance, precision: args.precision, gradientSteps: args.gradient_steps, title: args.title, axes: args.axes, flatten: args.flatten, outlines: args.outlines
         });
     } catch (error) {
         return {content: [text(`Could not convert the SVG: ${error.message}`)], isError: true};

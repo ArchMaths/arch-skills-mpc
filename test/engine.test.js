@@ -222,20 +222,22 @@ test('an SVG drawing converts to layers that build, reload identically and keep 
     assert.ok(result.ok);
     const state = JSON.parse(result.json);
     assert.equal(state.entries.length, conversion.stats.entries);
+    // Fills are inequalities; thin strokes and outlines are point lists, drawn exactly.
     const regions = state.entries.filter(e => e.plotType === 'implicit' && e.sign === '<');
-    const lines = state.entries.filter(e => e.plotType === 'implicit' && e.sign === '=');
-    assert.equal(regions.length + lines.length, state.entries.length, 'no seam point lists');
-    assert.ok(lines.length > 0);
+    const pointLists = state.entries.filter(e => e.type === 'point_list');
+    assert.equal(regions.length + pointLists.length, state.entries.length);
+    assert.equal(pointLists.length, conversion.stats.outlineEntries + conversion.stats.lineEntries);
+    assert.ok(conversion.stats.outlineEntries > 0 && conversion.stats.lineEntries > 0);
     assert.equal(state.name, 'Lighthouse at dusk');
     assert.deepEqual([state.showAxes, state.gridStyle, state.implicitPrecisionStep, state.autoBreakpointDetectionEnabled, state.orderedDrawingEnabled],
-        [false, 'hidden', 5, true, true]);
+        [false, 'hidden', 5, false, true]);
     // Entries are drawn in script order; the text box comes last, as in the SVG.
     const orders = state.entries.map(e => e.creationOrder);
     assert.deepEqual(orders, [...orders].sort((a, b) => a - b));
     const text = state.annotations.filter(a => a.type === 'text');
     assert.equal(text.length, 1);
     assert.ok(text[0].creationOrder > Math.max(...orders));
-    assert.match(decompile(result.json).script, /^@set .*autoBreakpointDetection=true.*orderedDrawing=true/m);
+    assert.match(decompile(result.json).script, /^@set .*orderedDrawing=true/m);
     // The flattening mode for older Arch builds still builds.
     const flat = await engine.run(convertSvg(svg, {flatten: true}).script, {screenshot: false, timeoutMs: 120000});
     assert.deepEqual(flat.errors, []);
@@ -269,6 +271,8 @@ function pixel(png, x, y) {
 // Screen pixel of graph point (x, y) for "@view x=-4..4 y=-3..3": the view is fitted into the
 // 870x800 canvas right of the sidebar.
 const at = (png, x, y) => pixel(png, Math.round(410 + 435 + x * 108.75), Math.round(400 - y * 108.75));
+// Screen pixel of SVG point (x, y) in a picture converted with its viewBox centred on the origin.
+const svgAt = (png, stats, x, y) => pixel(png, Math.round(410 + 435 + x * stats.pxPerUnit), Math.round(400 + y * stats.pxPerUnit));
 const close = (actual, expected, tolerance, what) =>
     assert.ok(actual.every((v, k) => Math.abs(v - expected[k]) <= tolerance), `${what}: ${actual} vs ${expected}`);
 
@@ -299,8 +303,7 @@ test('svg2arch shows translucent and near-white paint as the SVG does', async ()
     const conversion = convertSvg(svg);
     const result = await engine.run(conversion.script, {timeoutMs: 60000});
     assert.ok(result.ok, JSON.stringify(result.errors));
-    // 1 SVG unit = 1/100 graph unit at this zoom; SVG y points down.
-    const shot = (x, y) => at(result.png, x / 100, -y / 100);
+    const shot = (x, y) => svgAt(result.png, conversion.stats, x, y);
     const blue = [0x1e, 0x88, 0xe5];
     close(shot(-300, -50), blue, 3, 'blue');
     close(shot(-100, -175), blue.map(v => (v + 255) / 2), 6, 'white 50% over blue');
@@ -309,4 +312,23 @@ test('svg2arch shows translucent and near-white paint as the SVG does', async ()
     close(shot(100, 75), [178, 178, 178], 6, 'black 30% over the canvas');
     close(shot(-100, 220), [240, 240, 240], 4, 'near-white #f0f0f0 over blue and canvas');
     close(shot(100, 220), [240, 240, 240], 4, 'near-white #f0f0f0 over the canvas');
+});
+
+test('svg2arch outlines give filled shapes sharp corners, convex and concave', async () => {
+    const svg = `<svg viewBox="-400 -300 800 600"><rect x="-300" y="-200" width="200" height="200" fill="#1e88e5"/>
+        <rect x="0" y="-200" width="300" height="300" fill="#e53935"/><rect x="100" y="-100" width="100" height="100" fill="#ffffff"/></svg>`;
+    for (const outlines of [true, false]) {
+        const conversion = convertSvg(svg, {outlines});
+        const result = await engine.run(conversion.script, {timeoutMs: 60000});
+        assert.ok(result.ok, JSON.stringify(result.errors));
+        // Sample 2 px from each corner, along its diagonal.
+        const d = 2 / conversion.stats.pxPerUnit;
+        const shot = (x, y) => svgAt(result.png, conversion.stats, x, y);
+        const near = (actual, expected) => actual.every((v, k) => Math.abs(v - expected[k]) <= 12);
+        const corners = [near(shot(-300 + d, -200 + d), [0x1e, 0x88, 0xe5]), near(shot(-100 - d, -d), [0x1e, 0x88, 0xe5]),
+            near(shot(100 + d, -100 + d), [255, 255, 255]), near(shot(200 - d, -d), [255, 255, 255])];
+        // Arch's sampled fill alone cuts convex corners and rounds concave ones by a few pixels.
+        if (outlines) assert.deepEqual(corners, [true, true, true, true]);
+        else assert.ok(corners.includes(false), 'the test can tell');
+    }
 });

@@ -504,7 +504,7 @@ export class SvgRenderer {
                     }
                     const paths = ctx.clip ? P.clipOpen(open, ctx.clip, true) : open;
                     const color = paint.type === 'solid' ? paint.color : averagePaintColor(paint);
-                    if (paths.length) ctx.ops.push({kind: 'line', paths, color, alpha, widthPx, label});
+                    if (paths.length) ctx.ops.push({kind: 'line', paths, color, alpha, widthPx, cap: style['stroke-linecap'] || 'butt', label});
                 } else {
                     const outline = P.strokeOutline(user, m, {
                         width, join: style['stroke-linejoin'], cap: style['stroke-linecap'],

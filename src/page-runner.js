@@ -446,22 +446,40 @@ export async function runSteps({steps, title, script, messages = []}) {
         if (e.currentFrame > e.totalFrames) throw new Error(`current frame ${e.currentFrame} exceeds total ${e.totalFrames}`);
     };
 
-    for (const step of steps) {
-        try {
-            if (step.kind === 'create') await createStep(step);
-            else if (step.kind === 'operator') await operatorStep(step);
-            else if (step.kind === 'text') await textStep(step);
-            else if (step.kind === 'frames') await framesStep(step);
-            else if (step.kind === 'view') await viewStep(step);
-            else if (step.kind === 'set') await setStep(step);
-            else if (step.kind === 'style') {
-                const entry = resolveTarget(step.target);
-                await applyOptions(entry, step.line, step);
+    const runAll = async () => {
+        for (const step of steps) {
+            try {
+                if (step.kind === 'create') await createStep(step);
+                else if (step.kind === 'operator') await operatorStep(step);
+                else if (step.kind === 'text') await textStep(step);
+                else if (step.kind === 'frames') await framesStep(step);
+                else if (step.kind === 'view') await viewStep(step);
+                else if (step.kind === 'set') await setStep(step);
+                else if (step.kind === 'style') {
+                    const entry = resolveTarget(step.target);
+                    await applyOptions(entry, step.line, step);
+                }
+            } catch (error) {
+                err(step.line, translate(error.message));
             }
-        } catch (error) {
-            err(step.line, translate(error.message));
         }
+    };
+
+    // Drawing and the sidebar's entry list are paused while the steps run: Arch redraws every
+    // inequality and re-renders every entry card after each change, which makes big svg2arch
+    // pictures take minutes, and no check here depends on either. Both follow once (text boxes
+    // get their size when drawn).
+    e.draw = () => {};
+    e.updateEntryList = () => {};
+    try {
+        await runAll();
+    } finally {
+        delete e.draw;
+        delete e.updateEntryList;
     }
+    try { e.updateEntryList(); } catch (error) { warn(0, `Arch failed to list the entries: ${error.message}`); }
+    try { e.draw(); } catch (error) { warn(0, `Arch failed to draw the scene: ${error.message}`); }
+    e.requestDraw();
     api.refresh();
 
     if (title) {

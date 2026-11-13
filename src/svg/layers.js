@@ -27,6 +27,7 @@
 import * as P from './poly.js';
 import {over, archDimsColor, toHex} from './color.js';
 import {gradientBands} from './regions.js';
+import {joinedRuns, toIntPaths} from './outline.js';
 
 const WHITE = {r: 1, g: 1, b: 1, a: 1};
 const RGB = ['r', 'g', 'b'];
@@ -171,13 +172,24 @@ export function layerOps(ops, {q, tolerance, gradientSteps = 24, pxPerUnit, step
     };
 
     // An opaque near-white area: cut out of everything beneath it, so the canvas shows.
+    // A layer that later opaque layers hide all around the area gets a hole a cell wider: its
+    // sampled edge then stays clear of the area, out of sight, and only the layers that show
+    // around it carry its exact outline.
     const cut = paths => {
         const box = P.bbox(paths);
-        for (const layer of layers) {
-            if (layer.kind === 'text' || !P.overlaps(layer.bbox, box)) continue;
-            layer.paths = layer.kind === 'fill' ? P.difference(layer.paths, paths) : P.clipOpen(layer.paths, paths, false);
+        const wide = P.offset(paths, margin, 4), ring = P.difference(wide, paths);
+        const reach = P.bbox(wide), area = P.rect(reach);
+        layers.forEach((layer, index) => {
+            if (layer.kind === 'text' || !P.overlaps(layer.bbox, box)) return;
+            if (layer.kind !== 'fill') { layer.paths = P.clipOpen(layer.paths, paths, false); refresh(layer); return; }
+            let hole = paths;
+            const near = P.intersect(layer.paths, ring);
+            const above = layers.slice(index + 1).filter(l => l.kind === 'fill' && l.opacity === 1 && P.overlaps(l.bbox, reach));
+            if (near.length && above.length &&
+                P.area(P.difference(near, P.normalize(above.flatMap(l => P.intersect(l.paths, area))))) <= tiny) hole = wide;
+            layer.paths = P.difference(layer.paths, hole);
             refresh(layer);
-        }
+        });
         prune();
     };
 
@@ -316,8 +328,16 @@ export function layerOps(ops, {q, tolerance, gradientSteps = 24, pxPerUnit, step
             }
         }
         const opacity = draw.a >= 0.9995 ? 1 : round3(draw.a);
-        place({kind: 'line', paths: op.paths, hex: toHex(draw), opacity,
-            thickness: Math.min(20, Math.max(1, Math.round(op.widthPx))), labels: [op.label]});
+        // Drawn as a point list: exact polylines, with their joins (and square or round caps) closed.
+        const thickness = Math.min(20, Math.max(1, Math.round(op.widthPx * 10) / 10));
+        const half = thickness / 2 * pxInt, caps = op.cap === 'square' || op.cap === 'round';
+        const runs = [];
+        for (const path of op.paths) {
+            const closed = path.length > 3 && path[0].X === path[path.length - 1].X && path[0].Y === path[path.length - 1].Y;
+            runs.push(...joinedRuns(path.map(p => [p.X, p.Y]), {half, closed, caps, minGap: 0.25 * pxInt}));
+        }
+        const paths = toIntPaths(runs);
+        if (paths.length) place({kind: 'line', paths, hex: toHex(draw), opacity, thickness, labels: [op.label]});
     };
 
     for (const op of ops) {

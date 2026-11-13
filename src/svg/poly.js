@@ -111,10 +111,11 @@ export function contains(paths, X, Y) {
 export const rect = ({minX, minY, maxX, maxY}) => [[{X: minX, Y: minY}, {X: maxX, Y: minY}, {X: maxX, Y: maxY}, {X: minX, Y: maxY}]];
 export const grow = (box, d) => box && {minX: box.minX - d, minY: box.minY - d, maxX: box.maxX + d, maxY: box.maxY + d};
 
-// Grows (delta > 0) or shrinks closed Paths by delta integer steps, with mitred corners.
-export function offset(paths, delta) {
+// Grows (delta > 0) or shrinks closed Paths by delta integer steps, with mitred corners
+// (squared off where the miter would reach further than miterLimit times delta).
+export function offset(paths, delta, miterLimit = 2) {
     if (!paths.length || !delta) return paths;
-    const co = new ClipperOffset(2, 0.25);
+    const co = new ClipperOffset(miterLimit, 0.25);
     co.AddPaths(paths, JoinType.jtMiter, EndType.etClosedPolygon);
     const out = [];
     co.Execute(out, delta);
