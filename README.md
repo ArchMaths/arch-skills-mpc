@@ -130,7 +130,7 @@ setInterval(() => arch.valuesetting('a', Math.random()), 500);
 @end
 ```
 
-Full details, including an `arch.*` API reference, are in [docs/GUIDE.md](docs/GUIDE.md). There are more examples in `examples/` (`js-frames-text.arch` uses all of the above, `parametric-surfaces.arch` the parametric forms), and `examples/claude-chan/` is a detailed 3D figure built from parametric surfaces by a small generator script.
+Full details, including an `arch.*` API reference, are in [docs/GUIDE.md](docs/GUIDE.md). There are more examples in `examples/` (`js-frames-text.arch` uses all of the above, `parametric-surfaces.arch` the parametric forms), `examples/claude-chan/` is a detailed 3D figure built from parametric surfaces by a small generator script, and `examples/pelican/` is a smaller one: a pelican on a post that reads the same in light and dark mode.
 
 CLI:
 
