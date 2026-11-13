@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 160">
+  <title>Lighthouse at dusk</title>
+  <defs>
+    <style>
+      .rock { fill: #4a4e69; stroke: #22223b; stroke-width: 1.5; stroke-linejoin: round; }
+      .stripe { fill: #d62828; }
+      .wave { fill: none; stroke: #caf0f8; stroke-width: 0.6; stroke-linecap: round; }
+    </style>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#22223b"/>
+      <stop offset="0.55" stop-color="#9a8c98"/>
+      <stop offset="1" stop-color="#f2cc8f"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#fff3b0"/>
+      <stop offset="1" stop-color="#fff3b0" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="sea" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0077b6"/>
+      <stop offset="1" stop-color="#03045e"/>
+    </linearGradient>
+    <clipPath id="beam-clip"><rect x="0" y="0" width="240" height="112"/></clipPath>
+    <filter id="soft"><feGaussianBlur stdDeviation="2"/></filter>
+  </defs>
+
+  <rect width="240" height="160" fill="url(#sky)"/>
+  <circle cx="70" cy="104" r="20" fill="#f4a261" filter="url(#soft)"/>
+  <g fill="#ffffff" fill-opacity="0.35">
+    <ellipse cx="40" cy="38" rx="22" ry="6"/>
+    <ellipse cx="55" cy="34" rx="14" ry="6"/>
+    <ellipse cx="190" cy="24" rx="18" ry="5"/>
+  </g>
+
+  <path d="M0 112 H240 V160 H0 Z" fill="url(#sea)"/>
+  <path class="wave" d="M8 124 q6 -3 12 0 t12 0 M60 136 q6 -3 12 0 t12 0 t12 0 M120 148 q6 -3 12 0 t12 0 M200 130 q6 -3 12 0 t12 0"/>
+
+  <path class="rock" d="M120 160 L128 126 Q140 112 156 114 Q176 110 188 122 L200 160 Z"/>
+
+  <g transform="translate(160 40)">
+    <path d="M-8 76 L-5 10 H5 L8 76 Z" fill="#f8f9fa"/>
+    <path class="stripe" d="M-7.2 58 L-6.6 44 H6.6 L7.2 58 Z"/>
+    <path class="stripe" d="M-6.1 32 L-5.5 20 H5.5 L6.1 32 Z"/>
+    <rect x="-7" y="4" width="14" height="6" fill="#343a40"/>
+    <rect x="-4" y="-4" width="8" height="8" fill="#ffd166"/>
+    <path d="M-6 -4 L0 -11 L6 -4 Z" fill="#d62828"/>
+    <path d="M-9 10 H9" stroke="#212529" stroke-width="1.2"/>
+    <circle cx="0" cy="0" r="16" fill="url(#glow)"/>
+  </g>
+  <path d="M164 40 L240 22 V58 Z" fill="#fff3b0" fill-opacity="0.3" clip-path="url(#beam-clip)"/>
+
+  <path d="M20 150 L44 150 L40 156 L24 156 Z" fill="#6c584c"/>
+  <path d="M32 150 V128" stroke="#212529" stroke-width="0.8"/>
+  <path d="M33 129 L46 146 H33 Z" fill="#edede9"/>
+  <path d="M8 104 H232" stroke="#ffffff" stroke-opacity="0.5" stroke-width="1" stroke-dasharray="6 4"/>
+  <text x="12" y="20" font-size="9" fill="#f2e9e4">Lighthouse</text>
+</svg>

@@ -2,8 +2,11 @@
 import {test, after} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync, readdirSync} from 'node:fs';
+import {inflateSync} from 'node:zlib';
 import {ArchEngine} from '../src/engine.js';
 import {decompile} from '../src/decompile.js';
+import {convertSvg} from '../src/svg/index.js';
+import {archOver, archShown, CLEAR} from '../src/svg/layers.js';
 
 const engine = new ArchEngine({keepWarm: true});
 after(() => engine.close());
@@ -50,7 +53,8 @@ test('mistakes are reported per line and nothing is marked ok', async () => {
     assert.equal(result.ok, false);
     const lines = result.errors.map(e => e.line);
     assert.deepEqual(lines, [3, 5, 6, 7]);
-    assert.match(result.errors[0].message, /already taken.*a_1/);
+    // Arch 12202 refuses the taken name (earlier builds renamed the new variable to a_1).
+    assert.match(result.errors[0].message, /"a" is already taken by a variable that line 2 auto-created/);
     assert.match(result.errors[1].message, /unknown name\(s\) "cc"/);
     assert.match(result.errors[2].message, /"A", "B"/);
     // Since Arch 12201, Arch keeps unreadable input as a text note; the tool reports it as an error.
@@ -142,14 +146,12 @@ test('decompiling a file with operators, frames, text and a script rebuilds iden
     assert.equal(pick(JSON.parse(second.json)), pick(JSON.parse(first.json)));
 });
 
-test('errors inside Arch itself are reported once, as an Arch bug with a workaround', async () => {
-    const result = await engine.run('y=x\npoint(A,0,0)\npoint(B,1,0)\nlength(d,A,B)', {screenshot: false});
-    assert.ok(result.ok, 'file stays valid');
-    const internal = result.warnings.filter(w => /Arch hit an internal error in drawMeasurements/.test(w.message));
-    assert.equal(internal.length, 1);
-    assert.match(internal[0].message, /create the measured points first/i);
-    const fixed = await engine.run('point(A,0,0)\npoint(B,1,0)\ny=x\nlength(d,A,B)', {screenshot: false});
-    assert.deepEqual(fixed.warnings, []);
+test('length labels after curves draw without internal errors (an Arch bug fixed in 12202)', async () => {
+    for (const source of ['y=x\npoint(A,0,0)\npoint(B,1,0)\nlength(d,A,B)', 'point(A,0,0)\npoint(B,1,0)\ny=x\nlength(d,A,B)']) {
+        const result = await engine.run(source, {screenshot: false});
+        assert.ok(result.ok, source);
+        assert.deepEqual(result.warnings, [], source);
+    }
 });
 
 const pngSize = png => [png.readUInt32BE(16), png.readUInt32BE(20)];
@@ -209,4 +211,102 @@ test('t can name a variable or an operator (Arch 12201+)', async () => {
     const result = await engine.run('t=2\ny=t*x\n@operator twice(t)\n  return 2 * t;\n@end\ny=twice(x)', {screenshot: false});
     assert.deepEqual(result.errors, []);
     assert.equal(byName(result, 't').value, 2);
+});
+
+test('an SVG drawing converts to layers that build, reload identically and keep their drawing order', async () => {
+    const svg = readFileSync(new URL('../examples/svg/lighthouse.svg', import.meta.url), 'utf8');
+    const conversion = convertSvg(svg);
+    const result = await engine.run(conversion.script, {screenshot: false, timeoutMs: 120000});
+    assert.deepEqual(result.errors, []);
+    assert.deepEqual(result.warnings, []);
+    assert.ok(result.ok);
+    const state = JSON.parse(result.json);
+    assert.equal(state.entries.length, conversion.stats.entries);
+    const regions = state.entries.filter(e => e.plotType === 'implicit' && e.sign === '<');
+    const lines = state.entries.filter(e => e.plotType === 'implicit' && e.sign === '=');
+    assert.equal(regions.length + lines.length, state.entries.length, 'no seam point lists');
+    assert.ok(lines.length > 0);
+    assert.equal(state.name, 'Lighthouse at dusk');
+    assert.deepEqual([state.showAxes, state.gridStyle, state.implicitPrecisionStep, state.autoBreakpointDetectionEnabled, state.orderedDrawingEnabled],
+        [false, 'hidden', 5, true, true]);
+    // Entries are drawn in script order; the text box comes last, as in the SVG.
+    const orders = state.entries.map(e => e.creationOrder);
+    assert.deepEqual(orders, [...orders].sort((a, b) => a - b));
+    const text = state.annotations.filter(a => a.type === 'text');
+    assert.equal(text.length, 1);
+    assert.ok(text[0].creationOrder > Math.max(...orders));
+    assert.match(decompile(result.json).script, /^@set .*autoBreakpointDetection=true.*orderedDrawing=true/m);
+    // The flattening mode for older Arch builds still builds.
+    const flat = await engine.run(convertSvg(svg, {flatten: true}).script, {screenshot: false, timeoutMs: 120000});
+    assert.deepEqual(flat.errors, []);
+    assert.equal(JSON.parse(flat.json).orderedDrawingEnabled, false);
+});
+
+// RGB of pixel (x, y) in an 8-bit RGB or RGBA PNG (no interlacing), as Chrome writes them.
+function pixel(png, x, y) {
+    const width = png.readUInt32BE(16), type = png[25], bpp = type === 6 ? 4 : 3;
+    const chunks = [];
+    for (let at = 8; at < png.length;) {
+        const length = png.readUInt32BE(at), kind = png.toString('ascii', at + 4, at + 8);
+        if (kind === 'IDAT') chunks.push(png.subarray(at + 8, at + 8 + length));
+        at += 12 + length;
+    }
+    const raw = inflateSync(Buffer.concat(chunks)), stride = width * bpp;
+    let previous = Buffer.alloc(stride);
+    for (let row = 0; row <= y; row++) {
+        const filter = raw[row * (stride + 1)], line = Buffer.from(raw.subarray(row * (stride + 1) + 1, (row + 1) * (stride + 1)));
+        for (let i = 0; i < stride; i++) {
+            const left = i >= bpp ? line[i - bpp] : 0, up = previous[i], corner = i >= bpp ? previous[i - bpp] : 0;
+            const p = left + up - corner, pa = Math.abs(p - left), pb = Math.abs(p - up), pc = Math.abs(p - corner);
+            const predictor = [0, left, up, (left + up) >> 1, pa <= pb && pa <= pc ? left : pb <= pc ? up : corner][filter];
+            line[i] = (line[i] + predictor) & 255;
+        }
+        previous = line;
+    }
+    return [0, 1, 2].map(k => previous[x * bpp + k]);
+}
+
+// Screen pixel of graph point (x, y) for "@view x=-4..4 y=-3..3": the view is fitted into the
+// 870x800 canvas right of the sidebar.
+const at = (png, x, y) => pixel(png, Math.round(410 + 435 + x * 108.75), Math.round(400 - y * 108.75));
+const close = (actual, expected, tolerance, what) =>
+    assert.ok(actual.every((v, k) => Math.abs(v - expected[k]) <= tolerance), `${what}: ${actual} vs ${expected}`);
+
+test("Arch's ordered drawing stacks fills in creation order and blends them as svg2arch models it", async () => {
+    const result = await engine.run([
+        'x<0 | color=#ff0000 opacity=1',
+        'abs(y)<1 | color=#0000ff opacity=0.5',
+        'abs(y+2)<0.5 | color=#00ff00 opacity=1',
+        'abs(x+2)<0.5 | color=#ffff00 opacity=1',
+        '@view x=-4..4 y=-3..3',
+        '@set orderedDrawing=true showAxes=false showAxisNumbers=false gridStyle=hidden'
+    ].join('\n'), {timeoutMs: 60000});
+    assert.ok(result.ok, JSON.stringify(result.errors));
+    const blue = {r: 0, g: 0, b: 1, a: 0.5}, red = {r: 1, g: 0, b: 0, a: 1};
+    const expect = stack => { const s = archShown(stack.reduce((gl, c) => archOver(c, gl), CLEAR)); return [s.r, s.g, s.b].map(v => Math.round(Math.min(1, v) * 255)); };
+    close(at(result.png, -3, 0), expect([red, blue]), 3, 'translucent blue over red');
+    close(at(result.png, 2, 0), expect([blue]), 3, 'translucent blue over the canvas');
+    // Later entries cover earlier ones, whatever their grid-scan order.
+    close(at(result.png, -2, -2), [255, 255, 0], 3, 'yellow over green over red');
+    close(at(result.png, 2, -2), [0, 255, 0], 3, 'green');
+});
+
+test('svg2arch shows translucent and near-white paint as the SVG does', async () => {
+    const svg = `<svg viewBox="-400 -300 800 600"><rect x="-400" y="-300" width="400" height="600" fill="#1e88e5"/>
+        <rect x="-300" y="-250" width="500" height="150" fill="#ffffff" fill-opacity="0.5"/>
+        <rect x="-300" y="0" width="500" height="150" fill="#000000" fill-opacity="0.3"/>
+        <rect x="-150" y="180" width="300" height="80" fill="#f0f0f0"/></svg>`;
+    const conversion = convertSvg(svg);
+    const result = await engine.run(conversion.script, {timeoutMs: 60000});
+    assert.ok(result.ok, JSON.stringify(result.errors));
+    // 1 SVG unit = 1/100 graph unit at this zoom; SVG y points down.
+    const shot = (x, y) => at(result.png, x / 100, -y / 100);
+    const blue = [0x1e, 0x88, 0xe5];
+    close(shot(-300, -50), blue, 3, 'blue');
+    close(shot(-100, -175), blue.map(v => (v + 255) / 2), 6, 'white 50% over blue');
+    close(shot(100, -175), [255, 255, 255], 3, 'white 50% over the canvas');
+    close(shot(-100, 75), blue.map(v => v * 0.7), 6, 'black 30% over blue');
+    close(shot(100, 75), [178, 178, 178], 6, 'black 30% over the canvas');
+    close(shot(-100, 220), [240, 240, 240], 4, 'near-white #f0f0f0 over blue and canvas');
+    close(shot(100, 220), [240, 240, 240], 4, 'near-white #f0f0f0 over the canvas');
 });

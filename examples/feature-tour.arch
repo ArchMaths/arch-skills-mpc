@@ -11,7 +11,7 @@ y=f(x)                      | ref=fcurve color=purple
 x^2+y^2=4                   | ref=circ color=teal
 x^2/9+y^2/4<=1              | ref=ell color=orange opacity=0.25
 x=k*cos(t),y=sin(t)         | ref=pcurve color=pink
-r=root[x^2-2,x,1]
+r=root(x^2-2,x,1)
 y=x+range(x,-1,1)           | ref=piece color=brown thickness=6
 /-/(0,0)(1,1)(2,0)/(3,1)(4,0) | ref=pts color=green
 polyeq(sq,A,B,4)            | color=indigo

@@ -32,9 +32,9 @@ point(P,1,2) | label="Point P" dash=short fixed
     assert.equal(steps[7].target, 'last');
 });
 
-test('@set implicitPrecision is a saved setting', () => {
-    const {steps} = parseScript('@set implicitPrecision=12');
-    assert.deepEqual(steps[0].settings, [{name: 'implicitPrecision', value: '12'}]);
+test('@set implicitPrecision and autoBreakpointDetection are saved settings', () => {
+    const {steps} = parseScript('@set implicitPrecision=12 autoBreakpointDetection=true');
+    assert.deepEqual(steps[0].settings, [{name: 'implicitPrecision', value: '12'}, {name: 'autoBreakpointDetection', value: true}]);
     throwsAtLine('@set meshQuality=3', 1, /not saved in Arch files/);
 });
 

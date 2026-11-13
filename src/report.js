@@ -2,6 +2,14 @@ const MODE_NAMES = ['pingpong', 'forward', 'reverse', 'once', 'once-reverse'];
 
 const fmt = n => (typeof n === 'number' && Number.isFinite(n)) ? String(Math.round(n * 1e6) / 1e6) : String(n);
 
+// Generated expressions (e.g. svg2arch regions) can be tens of kilobytes; show their start only.
+const LONG = 300;
+export const shorten = text => {
+    const s = String(text ?? '');
+    return s.length > LONG ? `${s.slice(0, 200)}... (${s.length} characters)` : s;
+};
+const shortenQuoted = message => String(message).replace(/"([^"]{300,})"/g, (_, inner) => `"${shorten(inner)}"`);
+
 function describeObject(o) {
     const kind = o.type === 'advanced_custom_function_definition' ? 'JS operator' : (o.geometryType || o.plotType || o.type);
     const label = o.reference ? `${o.reference}` : (o.name || '');
@@ -16,7 +24,7 @@ function describeObject(o) {
     if (o.meaningful === false) extras.push('NO VALID VALUE');
     if (o.error) extras.push(`error: ${o.error}`);
     const where = o.line ? `L${o.line}` : 'auto';
-    return `  ${where.padEnd(5)} ${label ? label + ' ' : ''}[${kind}] ${o.expression}${value ? '  =>  ' + value : ''}${extras.length ? '  (' + extras.join(', ') + ')' : ''}`;
+    return `  ${where.padEnd(5)} ${label ? label + ' ' : ''}[${kind}] ${shorten(o.expression)}${value ? '  =>  ' + shorten(value) : ''}${extras.length ? '  (' + extras.join(', ') + ')' : ''}`;
 }
 
 // brief: only the status, errors, warnings and @script preview, for a build after a check already listed the objects.
@@ -33,11 +41,11 @@ export function formatReport(result, {written, screenshot, scriptScreenshot, bri
     const where = item => item.line ? `line ${item.line}` : 'file';
     if (result.errors.length) {
         out.push('', 'Errors:');
-        for (const e of result.errors) out.push(`  ${where(e)}: ${e.message}`);
+        for (const e of result.errors) out.push(`  ${where(e)}: ${shortenQuoted(e.message)}`);
     }
     if (result.warnings?.length) {
         out.push('', 'Warnings:');
-        for (const w of result.warnings) out.push(`  ${where(w)}: ${w.message}`);
+        for (const w of result.warnings) out.push(`  ${where(w)}: ${shortenQuoted(w.message)}`);
     }
     if (objects.length && !brief) {
         out.push('', 'Objects (line, reference, type, definition => current value):');

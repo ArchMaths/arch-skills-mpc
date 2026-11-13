@@ -73,7 +73,8 @@ test('the skill only mentions guide topics and CLI flags that exist', () => {
     const tableTopics = [...skill.matchAll(/^\| `([a-z]+)` \|/gm)].map(m => m[1]);
     assert.ok(tableTopics.length >= 8);
     for (const t of [...topics, ...tableTopics]) assert.ok(GUIDE_TOPICS[t], `skill mentions unknown topic ${t}`);
-    const help = runCli(['--help']).stdout;
+    const svgHelp = spawnSync(process.execPath, [fileURLToPath(new URL('../src/svg2arch.js', import.meta.url)), '--help'], {encoding: 'utf8'}).stdout;
+    const help = runCli(['--help']).stdout + svgHelp;
     for (const flag of new Set(skill.match(/(?<![\w-])--[a-z][a-z-]+/g))) assert.ok(help.includes(flag), `skill mentions unknown flag ${flag}`);
     // Keep the always-loaded part small; details live behind --guide.
     assert.ok(skill.length < 9000, `SKILL.md is ${skill.length} bytes`);
