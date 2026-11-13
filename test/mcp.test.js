@@ -94,7 +94,7 @@ test('arch_svg converts an SVG and writes the scene script and save file', async
     const result = await client.callTool({name: 'arch_svg', arguments: {svg, output_path: 'out/squares.txt', screenshot: false}});
     assert.equal(result.isError, false, textOf(result));
     // The upper square is stacked on the lower one, both whole: 4 edges each.
-    assert.match(textOf(result), /Converted: 2 layer\(s\) drawn in order, 2 entries .* 8 edges/);
+    assert.match(textOf(result), /Converted: 2 layer\(s\) drawn in order, 4 entries \(2 outline\(s\).* 8 edges/);
     assert.match(textOf(result), /filters are ignored/);
     assert.match(textOf(result), /OK: wrote .*squares\.txt/);
     const save = JSON.parse(readFileSync(join(dir, 'out/squares.txt'), 'utf8'));

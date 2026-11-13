@@ -33,6 +33,8 @@ Options:
                           non-overlapping colour regions, with seam lines between them
   --no-seams              do not hide seams between neighbouring shapes (lower shapes then stop
                           at their neighbours' edges; with --flatten, no seam lines)
+  --no-outlines           do not trace opaque shapes with exact point lists (fewer entries; Arch's
+                          sampling then rounds corners by a few pixels)
   --timeout <s>           seconds each Arch step may take (default 30); raise for very large drawings
   --html <path>           Arch index.html to use (default: ARCH_HTML or ./index.html)
   --json                  print the full result as JSON
@@ -73,6 +75,7 @@ function parseArgs(argv) {
         case '--axes': args.options.axes = true; break;
         case '--no-seams': args.options.seams = false; break;
         case '--flatten': args.options.flatten = true; break;
+        case '--no-outlines': args.options.outlines = false; break;
         case '--timeout': {
             const s = number(a, value());
             if (!(s > 0)) throw new Error('--timeout must be a positive number of seconds');
