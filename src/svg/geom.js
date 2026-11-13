@@ -27,6 +27,8 @@ export function maxScale(m) {
     const s = a * a + b * b + c * c + d * d, det = a * d - b * c;
     return Math.sqrt((s + Math.sqrt(Math.max(0, s * s - 4 * det * det))) / 2);
 }
+// Smallest stretch factor (smallest singular value).
+export const minScale = m => { const top = maxScale(m); return top ? Math.abs(m[0] * m[3] - m[1] * m[2]) / top : 0; };
 export function invert(m) {
     const det = m[0] * m[3] - m[1] * m[2];
     if (!det) return null;

@@ -19,7 +19,7 @@ const INSTRUCTIONS = `Arch is a GeoGebra-like graphing calculator. These tools t
 Workflow: call arch_guide once to learn the script format and Arch syntax (or pass section to read only one part); write a script; call arch_check and read the errors, warnings, object values and screenshot; fix and re-check; then arch_build to write the file. To modify an existing save file, call arch_decompile first, edit the script, then build.
 Never hand-write Arch save-file JSON: it contains parser-computed fields and will not load correctly.
 Scripts can also define JavaScript operators (@operator), canvas text (@text), frame-by-frame steps (@frames, frame=) and a global program (@script, test-run for 2 s in an isolated page); see arch_guide.
-To turn an SVG drawing into an Arch file, call arch_svg: it fills every colour with inequalities (filters are ignored) and builds the save file.`;
+To turn an SVG drawing into an Arch file, call arch_svg: it fills every shape with inequalities, drawn in the SVG's order (filters are ignored), and builds the save file.`;
 
 const server = new McpServer({name: 'arch', version: '0.1.0'}, {instructions: INSTRUCTIONS});
 
@@ -109,7 +109,7 @@ server.registerTool('arch_build', {
 
 server.registerTool('arch_svg', {
     title: 'Convert an SVG drawing to an Arch save file',
-    description: 'Converts an SVG file into an Arch 2D save file: every colour of the picture becomes inequality regions (one signed-distance inequality per colour), thin strokes become lines and text becomes text boxes; filters are ignored. Writes the scene script (.arch, editable and rebuildable with arch_build) and the save file, after running both in the real Arch engine. Returns a conversion summary (regions, edges, approximate redraw time, unsupported features), the build report and a screenshot.',
+    description: 'Converts an SVG file into an Arch 2D save file: every filled shape becomes a signed-distance inequality, stacked in the SVG\'s painting order with Arch\'s ordered drawing (Arch 12202+), thin strokes become lines and text becomes text boxes; filters are ignored. Writes the scene script (.arch, editable and rebuildable with arch_build) and the save file, after running both in the real Arch engine. Returns a conversion summary (layers, edges, approximate redraw time, unsupported features), the build report and a screenshot.',
     inputSchema: {
         svg_path: z.string().optional().describe('Path to the .svg file.'),
         svg: z.string().optional().describe('SVG markup, instead of svg_path.'),
@@ -121,6 +121,7 @@ server.registerTool('arch_svg', {
         gradient_steps: z.number().int().min(1).max(64).optional().describe(`At most this many colour bands per gradient (default ${SVG_DEFAULTS.gradientSteps}; fewer when its colours are close; 1 uses the average colour).`),
         title: z.string().optional().describe('File name shown in Arch (default: the SVG <title>).'),
         axes: z.boolean().optional().describe('Keep Arch axes and grid visible (default false).'),
+        flatten: z.boolean().optional().describe('For Arch builds before 12202, which have no ordered drawing: cut the picture into non-overlapping colour regions with seam lines between them (default false). More edges, and small notches where regions meet.'),
         screenshot: z.boolean().optional().describe('Include a screenshot (default true).'),
         screenshot_scale: z.number().min(0.1).max(1).optional().describe('Screenshot scale (default 1 = 1280x800).')
     }
@@ -130,7 +131,7 @@ server.registerTool('arch_svg', {
     let conversion;
     try {
         conversion = convertSvg(args.svg ?? readFileSync(abs(args.svg_path), 'utf8'), {
-            tolerance: args.tolerance, precision: args.precision, gradientSteps: args.gradient_steps, title: args.title, axes: args.axes
+            tolerance: args.tolerance, precision: args.precision, gradientSteps: args.gradient_steps, title: args.title, axes: args.axes, flatten: args.flatten
         });
     } catch (error) {
         return {content: [text(`Could not convert the SVG: ${error.message}`)], isError: true};

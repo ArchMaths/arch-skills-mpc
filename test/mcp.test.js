@@ -93,12 +93,16 @@ test('arch_svg converts an SVG and writes the scene script and save file', async
         '<rect x="4" y="4" width="6" height="6" fill="#457b9d" filter="url(#none)"/></svg>';
     const result = await client.callTool({name: 'arch_svg', arguments: {svg, output_path: 'out/squares.txt', screenshot: false}});
     assert.equal(result.isError, false, textOf(result));
-    assert.match(textOf(result), /Converted: 2 colour region\(s\)/);
+    // The upper square is stacked on the lower one, both whole: 4 edges each.
+    assert.match(textOf(result), /Converted: 2 layer\(s\) drawn in order, 2 entries .* 8 edges/);
     assert.match(textOf(result), /filters are ignored/);
     assert.match(textOf(result), /OK: wrote .*squares\.txt/);
     const save = JSON.parse(readFileSync(join(dir, 'out/squares.txt'), 'utf8'));
     assert.equal(save.name, 'Two squares');
     assert.ok(save.entries.some(e => e.sign === '<'));
+    assert.equal(save.orderedDrawingEnabled, true);
+    const flat = await client.callTool({name: 'arch_svg', arguments: {svg, check: true, flatten: true, screenshot: false}});
+    assert.match(textOf(flat), /Converted: 2 colour region\(s\)/);
     assert.match(readFileSync(join(dir, 'out/squares.arch'), 'utf8'), /^cos\(pi\*/m);
     const missing = await client.callTool({name: 'arch_svg', arguments: {svg}});
     assert.equal(missing.isError, true);

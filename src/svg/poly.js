@@ -86,6 +86,31 @@ export function strokeOutline(polylines, matrix, {width, join, cap, miterLimit},
     return normalize(toPaths(user, q, {matrix}));
 }
 
+// The area within `delta` integer steps of open paths (polylines), as closed Paths.
+export function openOffset(open, delta) {
+    if (!open.length) return [];
+    const co = new ClipperOffset(2, 0.25);
+    co.AddPaths(open, JoinType.jtSquare, EndType.etOpenSquare);
+    const out = [];
+    co.Execute(out, Math.max(1, delta));
+    return normalize(out);
+}
+
+// Whether integer point (X, Y) lies inside simple, non-overlapping rings (even-odd).
+export function contains(paths, X, Y) {
+    let inside = false;
+    for (const r of paths)
+        for (let i = 0, j = r.length - 1; i < r.length; j = i++) {
+            const a = r[i], b = r[j];
+            if ((a.Y > Y) !== (b.Y > Y) && X < (b.X - a.X) * (Y - a.Y) / (b.Y - a.Y) + a.X) inside = !inside;
+        }
+    return inside;
+}
+
+// An axis-aligned rectangle as Paths.
+export const rect = ({minX, minY, maxX, maxY}) => [[{X: minX, Y: minY}, {X: maxX, Y: minY}, {X: maxX, Y: maxY}, {X: minX, Y: maxY}]];
+export const grow = (box, d) => box && {minX: box.minX - d, minY: box.minY - d, maxX: box.maxX + d, maxY: box.maxY + d};
+
 // Grows (delta > 0) or shrinks closed Paths by delta integer steps, with mitred corners.
 export function offset(paths, delta) {
     if (!paths.length || !delta) return paths;

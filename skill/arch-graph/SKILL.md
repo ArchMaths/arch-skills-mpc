@@ -19,7 +19,7 @@ To change an existing save file: `{{CLI}} --decompile file.txt -o file.arch`, ed
 
 ## SVG drawings
 
-`{{SVG2ARCH}} drawing.svg -o drawing.txt --png shot.png --png-scale 0.5` fills every colour with inequalities (filters are ignored) and writes `drawing.arch` and `drawing.txt`. Read its conversion warnings; `--precision 8` shows finer detail (slower redraws), `--tolerance 1` gives fewer edges. Don't hand-edit the generated regions; change the SVG and convert again.
+`{{SVG2ARCH}} drawing.svg -o drawing.txt --png shot.png --png-scale 0.5` fills every shape with inequalities, stacked in the SVG's painting order (filters are ignored), and writes `drawing.arch` and `drawing.txt`. Read its conversion warnings; `--precision 8` shows finer detail (slower redraws), `--tolerance 1` gives fewer edges. Don't hand-edit the generated regions; change the SVG and convert again.
 
 ## More reference: read only what the task needs
 

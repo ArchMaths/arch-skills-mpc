@@ -10,6 +10,7 @@ import {flattenOps, groupRegions, displayColor, gradientBands} from '../src/svg/
 import {regionExpression, lineEquation, quantumFormatter, fmt} from '../src/svg/inequality.js';
 import {planLines} from '../src/svg/lines.js';
 import {convertSvg} from '../src/svg/index.js';
+import {layerOps, fitLayer, archOver, archShown, CLEAR, nearestDrawable} from '../src/svg/layers.js';
 import {parseScript} from '../src/script.js';
 import * as P from '../src/svg/poly.js';
 
@@ -278,21 +279,124 @@ test('quantum formatting and numbers are exact and never use exponents', () => {
     assert.equal(fmt(-1234567.89), '-1234568');
 });
 
-test('convertSvg writes a scene script the parser accepts', () => {
+test('convertSvg writes a scene script the parser accepts, in both modes', () => {
     const svg = readFileSync(new URL('../examples/svg/lighthouse.svg', import.meta.url), 'utf8');
-    const {script, stats, warnings, info} = convertSvg(svg);
-    const {steps, title} = parseScript(script);
-    assert.equal(title, 'Lighthouse at dusk');
-    assert.equal(steps.filter(s => s.kind === 'create').length, stats.entries);
-    assert.ok(stats.regions > 20 && stats.lineEntries > 0 && stats.texts === 1);
-    const settings = steps.find(s => s.kind === 'set').settings;
-    assert.deepEqual(settings.map(s => s.name), ['implicitPrecision', 'showAxes', 'showAxisNumbers', 'gridStyle', 'autoBreakpointDetection']);
-    assert.ok(info.some(i => /filters are ignored/.test(i)));
-    assert.ok(Array.isArray(warnings));
-    // Every region is a strict inequality (fill only, no outline) with an explicit opacity.
-    const regions = steps.filter(s => s.kind === 'create' && s.expr.startsWith('cos(pi*'));
-    assert.ok(regions.every(s => /<0$|=0$/.test(s.expr) && s.style.color));
+    for (const flatten of [false, true]) {
+        const {script, stats, warnings, info} = convertSvg(svg, {flatten});
+        const {steps, title} = parseScript(script);
+        assert.equal(title, 'Lighthouse at dusk');
+        assert.equal(steps.filter(s => s.kind === 'create').length, stats.entries);
+        assert.ok(stats.regions > 20 && stats.lineEntries > 0 && stats.texts === 1);
+        assert.equal(stats.mode, flatten ? 'flatten' : 'ordered');
+        const settings = steps.find(s => s.kind === 'set').settings;
+        assert.deepEqual(settings.map(s => s.name), ['implicitPrecision', 'showAxes', 'showAxisNumbers', 'gridStyle', 'autoBreakpointDetection',
+            ...(flatten ? [] : ['orderedDrawing'])]);
+        assert.ok(info.some(i => /filters are ignored/.test(i)));
+        assert.ok(Array.isArray(warnings));
+        // Every region is a strict inequality (fill only, no outline) with an explicit opacity.
+        const regions = steps.filter(s => s.kind === 'create' && s.expr.startsWith('cos(pi*'));
+        assert.ok(regions.every(s => /<0$|=0$/.test(s.expr) && s.style.color));
+        // Ordered drawing needs no seam lines; the text box stays in painting order (last here).
+        assert.equal(stats.seamEntries > 0, flatten);
+        if (!flatten) assert.equal(steps.findIndex(s => s.kind === 'text'), steps.findLastIndex(s => s.kind === 'create') + 1);
+    }
+    const ordered = convertSvg(svg).stats, flat = convertSvg(svg, {flatten: true}).stats;
+    assert.ok(ordered.entries < flat.entries / 2 && ordered.edges < 0.7 * flat.edges, `${JSON.stringify(ordered)} vs ${JSON.stringify(flat)}`);
     assert.throws(() => convertSvg(svg, {precision: 50}), /precision/);
+});
+
+// Layers of an SVG at 10 px per unit with a 5 px grid (one cell = 500 integer steps of 0.001).
+const layersOf = (svg, extra = {}) => layerOps(render(svg).render(), {q: 0.001, tolerance: 0.01, pxPerUnit: 10, stepPx: 5, ...extra}).layers;
+const fills = layers => layers.filter(l => l.kind === 'fill');
+
+test('layers: shapes are stacked whole, in painting order; hidden ones are dropped; same colours merge', () => {
+    const layers = fills(layersOf(`<svg viewBox="0 0 100 100">
+        <rect x="40" y="40" width="10" height="10" fill="#00ff00"/>
+        <rect width="100" height="100" fill="#ff0000"/>
+        <circle cx="30" cy="30" r="10" fill="#0000ff"/>
+        <rect x="60" y="60" width="10" height="10" fill="#ff0000"/>
+        <circle cx="70" cy="30" r="10" fill="#0000ff"/></svg>`, {seams: false}));
+    // The green square is hidden by the red background; the background keeps its 4 corners
+    // (nothing is cut out of it); the two blue circles merge, and so does the second red square.
+    assert.deepEqual(layers.map(l => l.hex), ['#ff0000', '#0000ff']);
+    assert.equal(layers[0].paths.length, 1);
+    assert.equal(layers[0].paths[0].length, 4);
+    assert.equal(layers[1].paths.length, 2);
+    // A shape is not moved beneath a layer it overlaps.
+    const kept = fills(layersOf(`<svg viewBox="0 0 100 100"><rect width="50" height="50" fill="#ff0000"/>
+        <rect x="25" y="25" width="50" height="50" fill="#0000ff"/><rect x="40" y="40" width="50" height="50" fill="#ff0000"/></svg>`));
+    assert.deepEqual(kept.map(l => l.hex), ['#ff0000', '#0000ff', '#ff0000']);
+});
+
+test('layers: a shape bordering a later one reaches about a cell beneath it, so no seam shows', () => {
+    const svg = `<svg viewBox="0 0 100 100"><rect width="50" height="100" fill="#ff0000"/><rect x="50" width="50" height="100" fill="#0000ff"/></svg>`;
+    const [red] = fills(layersOf(svg));
+    const box = P.bbox(red.paths);
+    assert.ok(box.maxX >= 50500 && box.maxX <= 51500, `red reaches under blue: ${box.maxX}`);
+    assert.equal(P.bbox(fills(layersOf(svg, {seams: false}))[0].paths).maxX, 50000);
+    // Crossing outlines are left alone: a bar across a disk does not grow into it.
+    const [bar] = fills(layersOf(`<svg viewBox="0 0 100 100"><rect y="45" width="100" height="10" fill="#ff0000"/><circle cx="50" cy="50" r="30" fill="#0000ff"/></svg>`));
+    assert.equal(bar.paths[0].length, 4);
+});
+
+test('layers: opaque near-white is cut out of what lies beneath; translucent paint is fitted to Arch', () => {
+    const layers = fills(layersOf(`<svg viewBox="0 0 100 100"><rect width="100" height="100" fill="#1e88e5"/>
+        <rect x="20" y="20" width="20" height="20" fill="#ffffff"/><rect x="60" y="20" width="20" height="20" fill="#f0f0f0"/>
+        <rect x="20" y="60" width="60" height="20" fill="#000000" fill-opacity="0.3"/></svg>`));
+    const [blue, ink, shade] = layers;
+    assert.equal(blue.hex, '#1e88e5');
+    assert.equal(blue.paths.length, 3, 'two holes');
+    assert.ok(Math.abs(P.area(blue.paths) - (10000 - 800) * 1e6) < 1e6);
+    // #f0f0f0 over the canvas: a translucent ink that Arch shows as #f0f0f0.
+    const shown = archShown(archOver({...parseColor(ink.hex), a: ink.opacity}, CLEAR));
+    for (const k of ['r', 'g', 'b']) assert.ok(Math.abs(shown[k] * 255 - 240) < 1.5, `${k}: ${shown[k] * 255}`);
+    assert.equal(archDimsColor(parseColor(ink.hex)), false);
+    // Black 30% over blue: Arch shows a*c + (1-a)*below + a*(1-a)*white, so the layer is fitted.
+    const blueColor = {...parseColor('#1e88e5'), a: 1};
+    const result = archShown(archOver({...parseColor(shade.hex), a: shade.opacity}, archOver(blueColor, CLEAR)));
+    for (const k of ['r', 'g', 'b']) assert.ok(Math.abs(result[k] - 0.7 * blueColor[k]) < 4 / 255, `${k}`);
+});
+
+test("fitting translucent paint to Arch's blending", () => {
+    const red = {r: 1, g: 0, b: 0, a: 1}, canvas = {gl: CLEAR, color: {r: 1, g: 1, b: 1, a: 1}, weight: 1};
+    const onRed = {gl: {...red}, color: red, weight: 1};
+    const check = (target, bgs, fit) => {
+        for (const b of bgs) {
+            const shown = archShown(archOver(fit, b.gl)), want = {r: 0, g: 0, b: 0};
+            for (const k of ['r', 'g', 'b']) want[k] = target.a * target[k] + (1 - target.a) * b.color[k];
+            for (const k of ['r', 'g', 'b']) assert.ok(Math.abs(shown[k] - want[k]) <= 8 / 255, `${k}: ${shown[k]} vs ${want[k]}`);
+        }
+    };
+    const white = {r: 1, g: 1, b: 1, a: 0.4};
+    const fit = fitLayer(white, [onRed]);
+    check(white, [onRed], fit);
+    assert.ok(Math.abs(fit.a - 0.4) < 0.01, 'keeps the paint opacity when that works');
+    // Over red and over the canvas at once, black 50% has no single answer.
+    assert.equal(fitLayer({r: 0, g: 0, b: 0, a: 0.5}, [onRed, canvas]), null);
+    // Over the canvas alone it always has one.
+    const grey = {r: 0.9, g: 0.92, b: 0.95, a: 1};
+    check(grey, [canvas], fitLayer(grey, [canvas]));
+    assert.deepEqual(nearestDrawable({r: 1, g: 1, b: 1, a: 1}), {r: 0.85, g: 0.85, b: 0.85, a: 1});
+});
+
+test('layered gradient bands reach under the next band and cover the shape', () => {
+    const svg = `<svg viewBox="0 0 100 10"><linearGradient id="g"><stop offset="0" stop-color="#000"/><stop offset="1" stop-color="#00f"/></linearGradient>
+        <rect width="100" height="10" fill="url(#g)"/></svg>`;
+    const [op] = render(svg).render();
+    const bands = gradientBands(op.paths, op.paint, {q: 0.001, tolerance: 0.01, steps: 10, layered: true, overlap: 500});
+    assert.equal(bands.length, 10);
+    bands.forEach((band, i) => {
+        const box = P.bbox(band.paths);
+        assert.equal(box.minX, i === 0 ? 0 : i * 10000);
+        assert.equal(box.maxX, i === 9 ? 100000 : (i + 1) * 10000 + 500);
+    });
+    // Radial bands come outermost first.
+    const radial = `<svg viewBox="0 0 10 10"><radialGradient id="r"><stop offset="0" stop-color="red"/><stop offset="1" stop-color="blue"/></radialGradient>
+        <circle cx="5" cy="5" r="5" fill="url(#r)"/></svg>`;
+    const [rop] = render(radial).render();
+    const rings = gradientBands(rop.paths, rop.paint, {q: 0.001, tolerance: 0.001, steps: 5, layered: true, overlap: 100});
+    assert.ok(rings[0].color.b > rings[rings.length - 1].color.b);
+    assert.ok(Math.abs(P.area(rings[0].paths) - P.area(rop.paths)) < 1e3, 'the outermost band covers the whole shape');
 });
 
 test('an SVG without viewBox or size is framed around its content', () => {

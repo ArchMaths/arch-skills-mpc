@@ -125,6 +125,7 @@ export function decompile(saveText) {
     if (Number.isFinite(state.implicitPrecisionStep) && state.implicitPrecisionStep > 0 && state.implicitPrecisionStep !== 5)
         add('implicitPrecision', Math.round(20 / state.implicitPrecisionStep * 1000) / 1000);
     if (state.autoBreakpointDetectionEnabled) add('autoBreakpointDetection', true);
+    if (state.orderedDrawingEnabled) add('orderedDrawing', true);
     if (settings.length) lines.push(`@set ${settings.join(' ')}`);
 
     if (state.showPlaybackControls) {

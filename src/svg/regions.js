@@ -28,7 +28,14 @@ function variation(stops) {
 // change, at most maxSteps per gradient length (linear) or radius (radial).
 // Bands are also kept at least minBandPx wide (on screen at the saved zoom), so Arch's sampling
 // grid can show each of them.
-export function gradientBands(paths, paint, {q, tolerance, steps: maxSteps, pxPerUnit = Infinity, minBandPx = 0}) {
+//
+// layered: the bands come in drawing order for Arch's ordered drawing (linear: along the
+// gradient; radial: outermost first), with the element's opacity `alpha` applied to their
+// colours, and each band reaches `overlap` integer steps under the next one, so the boundary
+// between two bands is drawn once, by the upper band, with no seam. A radial band is then a
+// whole disk when that has no more vertices than a ring. overlap must be 0 for translucent
+// gradients (overlapping parts would blend twice); their bands then never overlap.
+export function gradientBands(paths, paint, {q, tolerance, steps: maxSteps, pxPerUnit = Infinity, minBandPx = 0, layered = false, overlap = 0, alpha = 1}) {
     const box = P.bbox(paths);
     if (!box) return [];
     const lengthPx = (paint.type === 'linear'
@@ -45,7 +52,7 @@ export function gradientBands(paths, paint, {q, tolerance, steps: maxSteps, pxPe
     const intervals = (tmin, tmax) => {
         const out = [];
         const push = (a, b, color) => {
-            if (b <= a) return;
+            if (b - a <= 1e-6) return;          // a zero-width pad interval (the gradient starts at the shape's edge)
             const last = out[out.length - 1];
             if (last && sameColor(last.color, color)) last.b = b;
             else out.push({a, b, color});
@@ -77,11 +84,15 @@ export function gradientBands(paths, paint, {q, tolerance, steps: maxSteps, pxPe
         const smin = Math.min(...ss) - pad, smax = Math.max(...ss) + pad;
         const at = (t, s) => [paint.x1 + t * vx + s * nx, paint.y1 + t * vy + s * ny];
         const list = intervals(tmin - 1e-9, tmax + 1e-9);
+        // How far t moves per integer step on screen (the gradient of t in device space).
+        const tAt = (X, Y) => { const [x, y] = G.apply(inv, X, Y); return ((x - paint.x1) * vx + (y - paint.y1) * vy) / len2; };
+        const dt = layered && overlap ? overlap * q * Math.hypot(tAt(1, 0) - tAt(0, 0), tAt(0, 1) - tAt(0, 0)) : 0;
         list.forEach((iv, i) => {
             // The outermost bands extend past the bounding box so rounding cannot leave a sliver.
-            const a = i === 0 ? iv.a - 0.01 : iv.a, b = i === list.length - 1 ? iv.b + 0.01 : iv.b;
+            const last = i === list.length - 1;
+            const a = i === 0 ? iv.a - 0.01 : iv.a, b = last ? iv.b + 0.01 : iv.b + dt;
             const strip = toInt([at(a, smin), at(b, smin), at(b, smax), at(a, smax)]);
-            bands.push({paths: P.intersect(P.normalize(strip), paths), color: iv.color});
+            bands.push({paths: P.intersect(P.normalize(strip), paths), color: layered ? {...iv.color, a: iv.color.a * alpha} : iv.color});
         });
     } else {
         const {cx, cy, r} = paint;
@@ -96,6 +107,21 @@ export function gradientBands(paths, paint, {q, tolerance, steps: maxSteps, pxPe
             return P.normalize(toInt(pts));
         };
         const list = intervals(0, tmax * 1.01 + 1e-9);
+        if (layered) {
+            // Outermost first; each band reaches `overlap` under the next (inner) band.
+            const reach = overlap * q / (G.minScale(paint.toDevice) || 1) / r;
+            const vertices = p => p.reduce((n, ring) => n + ring.length, 0);
+            const parts = [];
+            for (let i = list.length - 1; i >= 0; i--) {
+                const iv = list[i];
+                const whole = i === list.length - 1 ? paths : P.intersect(disk(iv.b), paths);
+                const hole = iv.a - reach;
+                const ring = i > 0 && hole > 0 ? P.difference(whole, disk(hole)) : whole;
+                parts.push({whole, ring, color: {...iv.color, a: iv.color.a * alpha}});
+            }
+            for (const p of parts) bands.push({paths: overlap && vertices(p.whole) <= vertices(p.ring) ? p.whole : p.ring, color: p.color});
+            return bands.filter(b => b.paths.length && b.color.a > 0.002);
+        }
         let inner = [];
         list.forEach((iv, i) => {
             const outer = i === list.length - 1 ? paths : disk(iv.b);

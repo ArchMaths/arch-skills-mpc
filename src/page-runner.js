@@ -15,6 +15,11 @@ export async function runSteps({steps, title, script, messages = []}) {
 
     const err = (line, message) => errors.push({line, message});
     const warn = (line, message) => warnings.push({line, message});
+    // Arch 12202+ computes curves and geometry in a worker by default ("异步绘图"), out of reach
+    // of the checks below (operator errors, objects without a value). Build with Arch's own
+    // synchronous path instead; the file is still saved with the setting on, as Arch saves it.
+    const asyncSaved = e.asyncDrawingEnabled;
+    if (asyncSaved && typeof e.setAsyncDrawingEnabled === 'function') e.setAsyncDrawingEnabled(false);
     const builtinNames = new Set([
         ...(e.calcJSUtils.calc1 || []), ...(e.calcJSUtils.advancedCustomFunctionNames || []),
         ...Object.keys(e.calcJSUtils.constants || {}), ...e.geometryKeywords, 'root', 'intercept']);
@@ -174,6 +179,9 @@ export async function runSteps({steps, title, script, messages = []}) {
         if (slider.play) playEntries.push(entry);
     };
 
+    // Arch 12202+ computes geometry values in a worker after each change ("异步绘图").
+    const idle = () => e._asyncDrawing?.waitForIdle ? e._asyncDrawing.waitForIdle() : Promise.resolve();
+
     const createStep = async step => {
         const {line} = step;
         const expr = step.text ? step.expr : substituteRefs(step.expr, localParameters(step.expr));
@@ -181,6 +189,8 @@ export async function runSteps({steps, title, script, messages = []}) {
         if (declared && refs.has(lower(declared)) && lower(refs.get(lower(declared))) !== lower(declared))
             return err(line, `"${declared}" is already used as a ref= label; pick a different object name`);
         const before = new Set(e.entries);
+        // Names unknown before the line runs: Arch may auto-create variables for (parts of) them.
+        const unknownBefore = step.text ? [] : unknownIdentifiers(expr);
         try {
             if (step.text) await guarded(() => api.execute({tool: 'objects.create', args: {expression: expr}}));
             // objects.create rolls back and throws with Arch's own error prompt text. It refuses
@@ -189,7 +199,11 @@ export async function runSteps({steps, title, script, messages = []}) {
             else await refuseTextFallback(expr, () => /[{}]/.test(expr) || expr.length > 6000 ? rawCreate(expr)
                 : guarded(() => api.execute({tool: 'objects.create', args: {expression: expr}})));
         } catch (error) {
-            return err(line, error.unreadable ? error.message : `Arch rejected "${expr}": ${translate(error.message)}`);
+            if (error.unreadable) return err(line, error.message);
+            // Arch 12202+ refuses a name that is taken instead of renaming the new object.
+            const holder = declared && e.entries.find(en => [en.name, en.key].some(n => n && lower(n) === lower(declared)));
+            const taken = holder ? ` The name "${declared}" is already taken${holder.isAutoCreatedVariable ? ` by a variable that line ${lineOf.get(holder) ?? '?'} auto-created` : ''}; use a unique name (names are case-insensitive), or define variables before using them.` : '';
+            return err(line, `Arch rejected "${expr}": ${translate(error.message)}${taken}`);
         }
         const created = e.entries.filter(en => !before.has(en));
         const norm = s => String(s || '').replace(/\s+/g, '').toLowerCase();
@@ -200,10 +214,14 @@ export async function runSteps({steps, title, script, messages = []}) {
         const missing = unknownReferences(primary);
         if (missing.length)
             err(line, `refers to ${missing.map(n => `"${n}"`).join(', ')}, which is not an existing geometry object or curve. Create referenced objects on earlier lines (check spelling; names are case-insensitive; curves are referenced by their ref= label or auto-number like func1).`);
-        else if (primary.type === 'geometry' && primary.isMeaningful === false) {
-            const unknown = unknownIdentifiers(expr);
+        else if (primary.type === 'geometry') {
+            await idle();
+            // Arch 12202+ reads an unknown name like "cc" as the product c*c and auto-creates c,
+            // so the object gets a value; earlier builds left it without one.
+            const madeVariables = new Set(created.filter(en => en.type === 'variable').map(en => lower(en.name || en.key || '')));
+            const unknown = primary.isMeaningful === false ? unknownIdentifiers(expr) : unknownBefore.filter(n => !madeVariables.has(n));
             if (unknown.length)
-                err(line, `unknown name(s) ${unknown.map(n => `"${n}"`).join(', ')}. Arch treated them as coordinate expressions, so the object has no value. Create the object or variable first, or fix the spelling.`);
+                err(line, `unknown name(s) ${unknown.map(n => `"${n}"`).join(', ')}. Arch treated them as coordinate expressions${primary.isMeaningful === false ? ', so the object has no value' : ' (a product of single-letter variables)'}. Create the object or variable first, or fix the spelling.`);
         }
         if (declared && (primary.name || primary.key) && ['variable', 'custom_function_definition', 'geometry'].includes(primary.type)) {
             const actual = primary.name || primary.key;
@@ -271,7 +289,17 @@ export async function runSteps({steps, title, script, messages = []}) {
         // Order tmin/tmax so the intermediate state always has tmin < tmax.
         const tmin = list.find(s => s.name === 'tmin'), tmax = list.find(s => s.name === 'tmax');
         if (tmin && tmax && tmin.value >= e.tmax) list.sort((a, b) => (a.name === 'tmax' ? -1 : 0) - (b.name === 'tmax' ? -1 : 0));
-        for (const s of list) await api.execute({tool: 'settings.set', args: {name: s.name, value: s.value}});
+        for (const s of list) {
+            if (s.name === 'orderedDrawing') {
+                // Arch's "顺序绘图" (ordered drawing, Arch 12202+): every object is drawn in creation
+                // order, inequality fills included. Saved in the file; the Agent API has no setting for it.
+                if (typeof s.value !== 'boolean') throw new Error('orderedDrawing must be true or false');
+                if (typeof e.setOrderedDrawingEnabled !== 'function') throw new Error('this Arch version has no ordered drawing (needs Arch 12202 or later)');
+                e.setOrderedDrawingEnabled(s.value);
+                continue;
+            }
+            await api.execute({tool: 'settings.set', args: {name: s.name, value: s.value}});
+        }
     };
 
     // Like the Agent API's checkedMutation, for input it refuses (JS operators contain braces).
@@ -454,6 +482,7 @@ export async function runSteps({steps, title, script, messages = []}) {
     }
 
     // Final health check after every dependency exists.
+    await idle();
     const describeRanges = entry => (entry.parametricParameters || []).filter(p => !p.global).map(p => {
         const value = text => {
             try { return Number(e.evaluateExpressionWithCalcJS(String(text), Object.fromEntries(e.variables || []))).toPrecision(6) * 1; } catch (_) { return NaN; }
@@ -483,8 +512,10 @@ export async function runSteps({steps, title, script, messages = []}) {
     playEntries.forEach(en => { en.playState = 1; });
     let json;
     try {
+        if (asyncSaved !== undefined) e.asyncDrawingEnabled = asyncSaved;
         json = JSON.stringify(e.exportStateObject(), (key, value) => key === 'compiledFunc' ? undefined : value);
     } finally {
+        if (asyncSaved !== undefined) e.asyncDrawingEnabled = false;
         playEntries.forEach((en, i) => { en.playState = previous[i]; });
     }
 
@@ -507,7 +538,7 @@ export async function runSteps({steps, title, script, messages = []}) {
 
 // Loads a save file into a fresh page and describes the result, to prove the file round-trips.
 // Autoplay is paused in this copy so values (and the screenshot) show the saved starting state.
-export function loadAndDescribe(json) {
+export async function loadAndDescribe(json) {
     const state = JSON.parse(json);
     for (const entry of state.entries || []) if (entry && entry.playState === 1) entry.playState = 0;
     json = JSON.stringify(state);
@@ -521,7 +552,11 @@ export function loadAndDescribe(json) {
     const alerts = [];
     const originalAlert = window.alert;
     window.alert = message => alerts.push(String(message));
-    try { e.loadState(json); } finally { e.showTopPrompt = original; window.alert = originalAlert; }
+    try {
+        e.loadState(json);
+        // Arch 12202+ computes values in a worker after loading ("异步绘图"); wait until it is done.
+        if (e._asyncDrawing?.waitForIdle) await e._asyncDrawing.waitForIdle();
+    } finally { e.showTopPrompt = original; window.alert = originalAlert; }
     const again = JSON.stringify(e.exportStateObject(), (key, value) => key === 'compiledFunc' ? undefined : value);
     return {errors: [...prompts, ...alerts], objects: e.entries.map(entry => api.describe(entry)), json: again};
 }

@@ -285,8 +285,13 @@ function compareSaved(a, b) {
     const same = (x, y) => JSON.stringify(norm(x)) === JSON.stringify(norm(y));
     const diffs = [];
     if ((a.globalScript || '') !== (b.globalScript || '')) diffs.push('the global script');
-    for (const key of ['showPlaybackControls', 'totalFrames', 'playbackFPS', 'currentFrame', 'frameExpr', 'offset3DZ'])
+    for (const key of ['showPlaybackControls', 'totalFrames', 'playbackFPS', 'currentFrame', 'frameExpr', 'offset3DZ', 'orderedDrawingEnabled'])
         if (!same(a[key], b[key])) diffs.push(`${key} ${JSON.stringify(a[key])} → ${JSON.stringify(b[key])}`);
+    // With ordered drawing, objects are painted in creation order (Arch 12202+ saves it per object).
+    const drawOrder = state => [...(state.entries || []).map((x, i) => ['entry', i, x.creationOrder]),
+        ...(state.annotations || []).map((x, i) => ['annotation', i, x.creationOrder])]
+        .filter(([, , n]) => Number.isFinite(n)).sort((x, y) => x[2] - y[2]).map(([kind, i]) => `${kind}${i}`);
+    if (a.orderedDrawingEnabled && !same(drawOrder(a), drawOrder(b))) diffs.push('the drawing order');
     const texts = state => (state.annotations || []).filter(t => t.type === 'text')
         .map(t => [t.content, t.x, t.y, t.width, t.height, t.fontSize, t.color]);
     if (!same(texts(a), texts(b))) diffs.push('text boxes');

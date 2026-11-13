@@ -10,7 +10,7 @@ Arch is a GeoGebra-like graphing calculator. You describe a figure as a **scene 
 2. Check it (`arch_check` / `arch-build --check`). Read every error and warning, verify the computed values in the object list, and look at the screenshot.
 3. Fix and re-check until clean, then build (`arch_build` / `arch-build scene.arch -o out.txt`).
 4. To change an existing save file: decompile it (`arch_decompile` / `arch-build --decompile`), edit the script, rebuild.
-5. To turn an SVG picture into an Arch file, use `arch_svg` / `svg2arch drawing.svg` rather than writing a script: it fills every colour with inequalities and writes both the script and the save file.
+5. To turn an SVG picture into an Arch file, use `arch_svg` / `svg2arch drawing.svg` rather than writing a script: it fills every shape with inequalities, stacked in the SVG's painting order, and writes both the script and the save file.
 
 The build stops with errors (and writes nothing) for syntax errors, unknown object names, renamed duplicates, and invalid options. Arch's own input box keeps a line it cannot read as a `//` text note without any message; the tool reports that line as an error instead, with Arch's reason. Warnings mean the file is valid but something may be unintended. Take them seriously, especially "no valid position" and "auto-created variable".
 
@@ -58,7 +58,7 @@ Animation speed: Arch advances about `100*step` per second. For a span L in T se
 
 - `@title Name`: file name shown in Arch.
 - `@view x=a..b y=c..d`: fit this region (2D). Or `@view center=x,y unit=N` (N = pixels per unit). For 3D: `@view 3d azimuth=35 elevation=25` (degrees), plus `unit=N` to zoom and `center=x,y,z` to move the 3D box so it is centred on that point (z is Arch's z shift; use it instead of moving every object). `@view 2d` switches back.
-- `@set name=value ...`: saved document settings only: `showAxes`, `showAxisNumbers`, `showPointLabels` (true/false), `gridStyle` (`grid|dots|polar|hidden`), `tmin`, `tmax` (parametric t range, default -2*pi..2*pi), `geometryMeasurementDisplay`, `showHiddenMath`, `showHiddenGeo`, `implicitPrecision` (0.5..20, default 4: how finely implicit 3D and parametric surfaces are meshed; a parametric surface gets 12.5×value grid steps per side, at most 240, so 12 gives about 150 instead of 50; higher values look smoother but take longer to draw. In 2D it sets the sampling grid for equations and inequalities: 20/value pixels), `autoBreakpointDetection` (true/false: Arch drops sign changes that are jumps rather than zeros when drawing equations; svg2arch line drawings rely on it).
+- `@set name=value ...`: saved document settings only: `showAxes`, `showAxisNumbers`, `showPointLabels` (true/false), `gridStyle` (`grid|dots|polar|hidden`), `tmin`, `tmax` (parametric t range, default -2*pi..2*pi), `geometryMeasurementDisplay`, `showHiddenMath`, `showHiddenGeo`, `implicitPrecision` (0.5..20, default 4: how finely implicit 3D and parametric surfaces are meshed; a parametric surface gets 12.5×value grid steps per side, at most 240, so 12 gives about 150 instead of 50; higher values look smoother but take longer to draw. In 2D it sets the sampling grid for equations and inequalities: 20/value pixels), `autoBreakpointDetection` (true/false: Arch drops sign changes that are jumps rather than zeros when drawing equations; svg2arch line drawings rely on it), `orderedDrawing` (true/false, Arch 12202+: draw every object in the order of the script, later lines on top, inequality fills included; without it Arch fills overlapping inequalities in grid-scan order and draws equation lines above all fills).
 - `@style target | options`: restyle an existing object by name, ref, auto-number, or `last`.
 - `@text x=.. y=.. [size=] [color=] [width=] [height=] [smart|plain] | content`: canvas text box (see below).
 - `@frames total=N fps=F [current=K] [bind=expr]`: turn on frame-by-frame playback (see below).
@@ -96,7 +96,7 @@ Always add an `@view` that frames the interesting part; Arch's default is center
 | `x^2+y^2=4`, `x*y=1` | Implicit curve (`eqN`). |
 | `x^2+y^2<=4`, `y>x^2` | Inequality region (`eqN`). One relation per line. |
 | `x=cos(t),y=sin(t)` | Parametric curve in t (`paraN`), x first then y. The t range is global (`@set tmin= tmax=`). For a curve with its own parameter and range, and for parametric surfaces, see below. |
-| `r=root[x^2-2,x,1]` | Numeric root of expr=0 from start value 1 (square brackets, expression not equation). |
+| `r=root(x^2-2,x,1)` | Numeric root of expr=0 from start value 1 (expression, not equation). Arch 12202 removed the old `root[...]` form. |
 | `/-/(0,0)(1,1)(2,0)/(3,1)(4,0)` | Point list / polyline (`plistN`); a top-level `/` starts a new piece. |
 | `2+3` | Computed value entry. |
 | 3D (after `@view 3d`): `z=x^2+y^2`, `x^2+y^2+z^2=9`, `x=cos(t),y=sin(t),z=t`, `(sin(u)*cos(v),sin(u)*sin(v),cos(u),u,0,pi,v,0,2*pi)` | Surfaces, space curves and parametric surfaces. Geometry commands are 2D only. |
