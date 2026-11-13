@@ -9,6 +9,7 @@ sphere itself; every land region is a decal of exact parametric patches lying on
 | `world-globe.arch` | The scene script it was built from (1 sphere, 1159 patches on 3 levels). |
 | `world-map.svg` | The coloured map: equirectangular, 720 x 360, 2 px per degree. |
 | `colorize.py` | Colours the downloaded map (Python 3, no dependencies). |
+| `preview.png` | The file as Arch shows it after opening. |
 
 ## Source
 
