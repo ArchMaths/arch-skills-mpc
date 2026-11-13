@@ -188,7 +188,7 @@ node src/svgsurf.js drawing.svg --surface "u;v;0.3*sin(u)*cos(v)" --domain=-3,3,
 node src/cli.js badge-sphere.arch -o badge-sphere.txt --timeout 600
 ```
 
-`--surface` takes a preset (`sphere`, `torus`, `cylinder`, `wave`) or `"X;Y;Z"` in `u` and `v` with `--domain u0,u1,v0,v1`. `--place u0,u1,vb,vt` is the texture mapping: the picture's left and right edges go to `u0` and `u1`, its bottom to `v = vb` and its top to `v = vt` (the sphere's default wraps it all the way round, equirectangular). `examples/svg/badge-sphere.*` and `examples/svg/lighthouse-torus.*` were made with the first two commands. Run `--help` for every option.
+`--surface` takes a preset (`sphere`, `torus`, `cylinder`, `wave`) or `"X;Y;Z"` in `u` and `v` with `--domain u0,u1,v0,v1`. `--place u0,u1,vb,vt` is the texture mapping: the picture's left and right edges go to `u0` and `u1`, its bottom to `v = vb` and its top to `v = vt` (the sphere's default wraps it all the way round, equirectangular). `examples/svg/badge-sphere.*` and `examples/svg/lighthouse-torus.*` were made with the first two commands. `examples/world-globe/` wraps an equirectangular world map (Natural Earth 110m, coloured by continent) onto a globe. Run `--help` for every option.
 
 How it works:
 
