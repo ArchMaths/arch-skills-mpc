@@ -9,7 +9,7 @@ every land region is a decal of exact parametric patches lying on it.
 | `world-globe.arch` | Its scene script (1 sphere, 1159 patches on 3 levels). |
 | `world-map.svg` | Its map: equirectangular, 720 x 360, 2 px per degree. |
 | `preview.png` | The continent globe as Arch shows it after opening. |
-| `world-globe-political.txt` | Countries, with latitude and longitude lines: the Arch save file. |
+| `world-globe-political.txt` | Countries, with latitude and longitude lines: the Arch save file (about 35 s to load). |
 | `world-globe-political.arch` | Its scene script (1 sphere, 2715 patches on 9 levels). |
 | `world-map-political-grid.svg` | Its map, with the grid drawn in. |
 | `preview-political.png` | The political globe as Arch shows it after opening. |
@@ -78,9 +78,9 @@ sed -i '1s/.*/@title Political world globe with latitude and longitude/' $G/worl
 node src/cli.js $G/world-globe-political.arch -o $G/world-globe-political.txt --timeout 1500
 ```
 
-The continent build takes about 3 minutes, the political one longer. The sphere preset
+The continent build takes about 3 minutes, the political one about 14. The sphere preset
 maps the picture's left and right edges to longitude -180° and 180°, its top to the north pole and
 its bottom to the south pole, so an equirectangular map lands on the globe unchanged.
 
 The political globe has more than twice the patches of the continent one, because country borders
-cut the land into many more strips. Its save file is bigger and slower to open.
+cut the land into many more strips. Its save file is 19 MB against 9 MB, and takes about 35 s to open against about 15 s.
