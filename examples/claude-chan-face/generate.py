@@ -28,7 +28,8 @@ face gets its own copy of hr without the parts that are negligible there.  The e
 separate shells.
 
 x is forward (she looks along +x), y is her left, z is up.  Needs numpy.
-    python3 generate.py [-o claude-chan-face.arch] [--prec 20] [--azimuth 22] [--elevation 6]
+    python3 generate.py [--expression natural-smile] [-o FILE.arch] [--prec 20]
+Each expression of the character sheet is a set of changes to the face (EXPRESSIONS below).
 """
 import argparse
 import math
@@ -281,10 +282,11 @@ neck = Inter([Ellipsoid([-0.25, 0, -0.8], [0.30, 0.30, np.inf], rot_y(7)),
               HalfSpace([0, 0, -1], h=1.55), HalfSpace([0, 0, 1], h=0.2)], 40)
 HEAD = Union([Union([cranium, lowerface], 24), neck], 14)
 
+CHEEKS = Bump(0.50, -0.40, 0.23, 0.18, 0.02, sym=True)   # set by the expression
 BUMPS = [
     Bump(0.39, -0.16, 0.14, 0.10, -0.025, sym=True),             # eye sockets
     Bump(0.0, -0.44, 0.04, 0.09, 0.05, svb=0.035, g=0.8),        # nose
-    Bump(0.50, -0.40, 0.23, 0.18, 0.02, sym=True),               # cheeks
+    CHEEKS,                                                      # cheeks
     Bump(0.0, -0.68, 0.17, 0.10, 0.015),                         # lips
     Bump(0.0, -1.45, 0.22, 0.32, 0.05),                          # chin
     Bump(0.0, -0.80, 0.105, 0.05, -0.01),                        # below the lower lip
@@ -351,9 +353,8 @@ def tile(face, u0, u1, v0, v1, color=SKIN, fn='hr', ev=None):
     ev = ev or ev_hr
     (P, Q, W), f = FACES[face]
     h = f'{fn}({P},{Q},{W})'
-    xyz = [mul(h, c) for c in (P, Q, W)]
     # orientation check: the normal should point away from the centre
-    uu, vv = np.meshgrid(np.linspace(u0, u1, 5), np.linspace(v0, v1, 5), indexing='ij')
+    uu, vv = np.meshgrid(np.linspace(u0, u1, 9), np.linspace(v0, v1, 9), indexing='ij')
     eps = 1e-5
 
     def pt(a, b):
@@ -363,6 +364,8 @@ def tile(face, u0, u1, v0, v1, color=SKIN, fn='hr', ev=None):
     N = np.cross(pt(uu + eps, vv) - pt(uu - eps, vv), pt(uu, vv + eps) - pt(uu, vv - eps), axis=0)
     if np.sum(N * Pm) < 0:
         print(f'warning: tile {face} {u0},{u1},{v0},{v1} faces inward')
+    # tiles that reach down into the neck bend with it; the others turn rigidly with the head
+    xyz = (bent if POSE['angle'] and Pm[2].min() < NECK_BEND[1] + 0.02 else posed)(h, (P, Q, W))
     emit(f'surface({xyz[0]},{xyz[1]},{xyz[2]},u,{num(u0)},{num(u1)},v,{num(v0)},{num(v1)}) | color={color}')
 
 
@@ -449,8 +452,9 @@ def decal(U, V, L, pa, pb, color, mirror=False, fn='de'):
         U = f'-({U})'
         pa, pb = pb, pa
     h = f'{fn}({U},{V},{L})'
+    xyz = posed(h, ('1', f'({U})', f'({V})'))
     rng = ','.join(f'{n},{num(a)},{num(b)}' for n, a, b in (pa, pb))
-    emit(f'surface({h},{h}*({U}),{h}*({V}),{rng}) | color={color}')
+    emit(f'surface({xyz[0]},{xyz[1]},{xyz[2]},{rng}) | color={color}')
 
 
 def clamp(v, lo, hi):
@@ -460,16 +464,109 @@ def clamp(v, lo, hi):
 # The left eye, in front-face coordinates.  t = 0 at the inner corner, 1 at the outer corner;
 # the lid curves give v relative to EYE_V.
 EYE_U0, EYE_UW, EYE_V = 0.155, 0.46, -0.16
-LID_UP = Curve([(0, 0.0), (0.08, 0.07), (0.25, 0.13), (0.45, 0.148), (0.65, 0.138),
-                (0.82, 0.106), (0.93, 0.064), (1.0, 0.022)], deg=7, name='lidu')
-LID_LO = Curve([(0, 0.0), (0.1, -0.05), (0.3, -0.1), (0.5, -0.118), (0.7, -0.112),
-                (0.85, -0.083), (0.95, -0.04), (1.0, 0.022)], deg=7, name='lidl')
+LID_UP_PTS = [(0, 0.0), (0.08, 0.07), (0.25, 0.13), (0.45, 0.148), (0.65, 0.138), (0.82, 0.106),
+              (0.93, 0.064), (1.0, 0.022)]
+LID_LO_PTS = [(0, 0.0), (0.1, -0.05), (0.3, -0.1), (0.5, -0.118), (0.7, -0.112), (0.85, -0.083),
+              (0.95, -0.04), (1.0, 0.022)]
+BROW_PTS = [(-0.05, 0.28), (0.2, 0.318), (0.5, 0.334), (0.8, 0.322), (1.05, 0.286)]
 LASH_TH = Curve([(0, 0.005), (0.15, 0.02), (0.4, 0.032), (0.7, 0.042), (0.9, 0.052),
                  (1.0, 0.056)], deg=4, name='lasht')
-BROW = Curve([(-0.05, 0.28), (0.2, 0.318), (0.5, 0.334), (0.8, 0.322), (1.05, 0.286)], deg=4,
-             name='brow')
 IRIS = dict(t=0.47, dv=-0.014, a=0.118, b=0.166)
 MOUTH_V = -0.68
+
+# ---------------------------------------------------------------- pose
+# A head tilt turns the head rigidly about a point at the top of the neck, P -> t + R P, which
+# for the skin is t + hr(D) * (R D): only the direction changes, so it costs nothing.  The
+# neck bends smoothly instead, from still at z = NECK_BEND[0] to fully turned at NECK_BEND[1].
+NECK_BEND = (-1.5, -0.85)
+POSE = dict(R=np.eye(3), t=np.zeros(3), angle=0.0)
+
+
+def rot_x(deg):
+    c, s = math.cos(math.radians(deg)), math.sin(math.radians(deg))
+    return np.array([[1, 0, 0], [0, c, -s], [0, s, c]])
+
+
+def set_pose(tilt):
+    """Tilt the head toward her right by tilt degrees (a roll about the forward axis)."""
+    R = rot_x(tilt)
+    pivot = np.array([0, 0, NECK_BEND[1]])
+    POSE.update(R=R, t=pivot - R @ pivot, angle=math.radians(tilt))
+
+
+def posed(h, D):
+    """The coordinates of h * D after the tilt; h is a radius and D three direction strings."""
+    if not POSE['angle']:
+        return [mul(h, c) for c in D]
+    out = []
+    for i in range(3):
+        rd = lin(POSE['R'][i], D)
+        p = h if rd == '1' else f'{h}*({rd})'
+        out.append(f'{num(POSE["t"][i])}+{p}' if abs(POSE['t'][i]) > 1e-9 else p)
+    return out
+
+
+def bent(h, D):
+    """Like posed, for the neck: the tilt angle grows smoothly with the height z."""
+    z0, z1 = NECK_BEND
+    X, Y, Z = (mul(h, c) for c in D)
+    c = f'min(max(({Z}-({num(z0)}))*{num(1 / (z1 - z0))},0),1)'
+    th = f'{num(POSE["angle"], 6)}*{c}^2*(3-2*{c})'
+    return [X, f'({Y})*cos({th})-({Z}-({num(z1)}))*sin({th})',
+            f'{num(z1)}+({Y})*sin({th})+({Z}-({num(z1)}))*cos({th})']
+
+# ---------------------------------------------------------------- expressions
+# Each expression on the sheet changes a few numbers of the face.  'base' is the face as first
+# built; every other expression overrides some of its values.
+BASE = dict(
+    title='Claude Chan - face',
+    lid_up=0.0,            # the middle of the upper lid moves by this (v; negative = down)
+    lid_lo=0.0,            # the middle of the lower lid moves by this (positive = up)
+    under_eye=False,       # the soft fold under the lower lid that a smile pushes up
+    gaze=(0.0, 0.0),       # (u, v) shift of both irises: where she looks
+    glow_dv=(-0.05, -0.07),  # how far below the iris centre its two bright bands sit
+    brow_dv=0.0,           # eyebrows up (+) or down (-)
+    mouth=dict(w=0.1, lift=0.024, hook=0.0, asym=0.0, th=0.011, taper=0.7),
+    cheek=(-0.40, 0.02),   # height and amplitude of the cheek bumps
+    blush_v=-0.42,
+    blush=3,               # how many of the three blush steps are drawn (0 = none)
+    tilt=0.0,              # head tilt toward her right, degrees
+    view=(22, 6),          # azimuth and elevation of the saved view
+)
+EXPRESSIONS = {
+    'base': {},
+    # 自然微笑, the first expression on the sheet: relaxed upper lids, lower lids pushed up by
+    # the cheeks, eyes on the viewer, a closed smile, the head tilted toward her right.
+    'natural-smile': dict(
+        title='Claude Chan - natural smile', lid_up=-0.04, lid_lo=0.04, under_eye=True,
+        gaze=(0.015, 0.01), glow_dv=(-0.03, -0.045), brow_dv=0.008,
+        mouth=dict(w=0.1, lift=0.016, hook=0.01, asym=0.003, th=0.008, taper=0.35),
+        cheek=(-0.37, 0.03), blush_v=-0.40, blush=1, tilt=12, view=(8, 6)),
+}
+X = dict(BASE)
+
+
+def lid_curve(pts, dv, name):
+    """A lid curve through pts, its middle moved by dv (the corners stay)."""
+    if not dv:
+        return Curve(pts, deg=7, name=name)
+    t, y = zip(*pts)
+    ts = np.linspace(0, 1, 17)
+    return Curve(list(zip(ts, spline(t, y)(ts) + dv * np.sin(np.pi * ts) ** 0.8)), deg=7,
+                 name=name)
+
+
+def set_expression(name):
+    global X, LID_UP, LID_LO, BROW
+    X = {**BASE, **EXPRESSIONS[name]}
+    LID_UP = lid_curve(LID_UP_PTS, X['lid_up'], 'lidu')
+    LID_LO = lid_curve(LID_LO_PTS, X['lid_lo'], 'lidl')
+    BROW = Curve([(t, v + X['brow_dv']) for t, v in BROW_PTS], deg=4, name='brow')
+    CHEEKS.v0, CHEEKS.amp = X['cheek']
+    set_pose(X['tilt'])
+
+
+set_expression('base')
 
 
 def eye_u(t):
@@ -526,13 +623,15 @@ def eye(mirror):
     decal(U, f'{bot}+w*(lidu(s)-lidl(s))', lv(1), s, w, '#f8f2ef', mirror)
     decal(U, f'max({top}-0.04*(1-w),{bot})', lv(2), s, w, '#e4d5dc', mirror)
     # iris: dark rim, amber body, bright lower half, the lid's shadow, pupil, highlights
-    cu = EYE_U0 + EYE_UW * IRIS['t']
-    cv = EYE_V + IRIS['dv']
+    gu, gv = X['gaze']
+    cu = EYE_U0 + EYE_UW * IRIS['t'] + (-gu if mirror else gu)   # mirror flips u
+    cv = EYE_V + IRIS['dv'] + gv
     a, b = IRIS['a'], IRIS['b']
     ellipse(cu, cv, a, b, lv(3), '#6a2a10', mirror, lid_lo, lid_hi)
     ellipse(cu, cv, 0.86 * a, 0.89 * b, lv(4), '#c0561a', mirror, lid_lo, lid_hi)
-    ellipse(cu, cv - 0.05, 0.66 * a, 0.5 * b, lv(5), '#e9892e', mirror, lid_lo, lid_hi)
-    ellipse(cu, cv - 0.07, 0.48 * a, 0.3 * b, lv(6), '#f7b24a', mirror, lid_lo, lid_hi)
+    g1, g2 = X['glow_dv']
+    ellipse(cu, cv + g1, 0.66 * a, 0.5 * b, lv(5), '#e9892e', mirror, lid_lo, lid_hi)
+    ellipse(cu, cv + g2, 0.48 * a, 0.3 * b, lv(6), '#f7b24a', mirror, lid_lo, lid_hi)
     ellipse(cu, cv, 0.86 * a, 0.89 * b, lv(7), '#4a1c0a', mirror,
             lambda U: lid_hi(U, -0.06), lid_hi)
     ellipse(cu, cv + 0.012, 0.34 * a, 0.44 * b, lv(8), '#2e1206', mirror, lid_lo, lid_hi)
@@ -558,20 +657,33 @@ def eye(mirror):
     f = '(s-0.22)*1.3699'
     decal(U, f'{top}+lasht(s)+0.026+w*0.008*4*{f}*(1-{f})', lv(2), ('s', 0.22, 0.95), w,
           '#d9a896', mirror)
+    if X['under_eye']:
+        # the soft fold under the lower lid that a smile pushes up
+        f = '(s-0.35)*1.8182'
+        decal(U, f'{bot}-0.032+w*0.006*4*{f}*(1-{f})', lv(2), ('s', 0.35, 0.9), w, '#ebc2b4',
+              mirror)
     # eyebrow: thick at the inner end, tapering outward
     th = '(0.026-0.02*(s+0.05)*0.9091)'
     decal(U, f'{num(EYE_V)}+brow(s)-{th}/2+w*{th}', lv(2), ('s', -0.05, 1.05), w, '#c4642e',
           mirror)
     # blush on the cheek, in three soft steps
-    for k, (sc, col) in enumerate(((1.0, '#fadcd2'), (0.7, '#f7cbc0'), (0.42, '#f3b9ad'))):
-        ellipse(0.47, -0.42, 0.13 * sc, 0.055 * sc, lv(k + 1), col, mirror, fn='dc')
+    steps = ((1.0, '#fadcd2'), (0.7, '#f7cbc0'), (0.42, '#f3b9ad'))[:X['blush']]
+    for k, (sc, col) in enumerate(steps):
+        ellipse(0.47, X['blush_v'], 0.13 * sc, 0.055 * sc, lv(k + 1), col, mirror, fn='dc')
 
 
 def mouth():
-    vm = MOUTH_V
-    th = '(0.011*(1-(s*10)^2)^0.7+0.002)'
-    decal('s', f'{num(vm)}+2.4*s^2-{th}/2+w*{th}', lv(2), ('s', -0.1, 0.1), ('w', 0, 1),
-          '#b0524a', fn='dm')
+    """A closed mouth: a line whose corners rise by lift (plus a small upturn, hook, at the very
+    ends, and asym more on her left), thickness th in the middle thinning toward the corners."""
+    m = X['mouth']
+    w = m['w']
+    mid = f'{num(MOUTH_V)}+{num(m["lift"] / w ** 2)}*s^2'
+    if m['hook']:
+        mid += f'+{num(m["hook"] / w ** 8, 1)}*s^8'
+    if m['asym']:
+        mid += f'+{num(m["asym"] / w)}*s'
+    th = f'({num(m["th"])}*(1-(s*{num(1 / w)})^2)^{num(m["taper"])}+0.002)'
+    decal('s', f'{mid}-{th}/2+w*{th}', lv(2), ('s', -w, w), ('w', 0, 1), '#b0524a', fn='dm')
 
 
 def ear(mirror):
@@ -590,17 +702,14 @@ def ear(mirror):
     front = f'0.012+{flare}+{rim}-0.028*exp(-(r*2)^2)'
     edge = '0.012+0.055*((1+cos(g))/2)^1.2+0.022*exp(-2.56)*(0.55+0.45*cos(g))-0.028*exp(-4)'
     back = f'({edge})*r^2-0.06*(1-r^2)'
-    sgn = -1 if mirror else 1
+    M = np.diag([1, -1, 1]) if mirror else np.eye(3)        # her right ear is the mirror image
+    R, t = POSE['R'], POSE['t']
+    E, eh, ek, n = t + R @ M @ E, R @ M @ eh, R @ M @ ek, R @ M @ n
     bowl = f'0.014+{flare}+{rim}-0.028*exp(-(r*2)^2)'
     for d, order, rmax, color in ((front, ('r', 'g'), 1, SKIN), (back, ('g', 'r'), 1, SKIN),
                                   (bowl, ('r', 'g'), 0.62, '#eebfb0')):
-        xyz = []
-        for i in range(3):
-            c = [E[i], eh[i], ek[i], n[i]]
-            if i == 1:
-                c = [sgn * v for v in c]
-            xyz.append(total([num(c[0]), term(c[1], [f'({h})']), term(c[2], [f'({k})']),
-                              term(c[3], [f'({d})'])]))
+        xyz = [total([num(E[i]), term(eh[i], [f'({h})']), term(ek[i], [f'({k})']),
+                      term(n[i], [f'({d})'])]) for i in range(3)]
         rng = {'r': f'r,0,{num(rmax)}', 'g': f'g,0,{num(2 * math.pi)}'}
         if mirror:
             order = order[::-1]
@@ -646,7 +755,7 @@ def build(args):
             for f in FACES:
                 tiles(f, [-1, 0, 1], [-1, 0, 1], (color,), name, lambda D, n=node: 1 / n.ev_inv(D, 1))
     else:
-        emit('@title Claude Chan - face')
+        emit(f'@title {X["title"]}')
         emit('# The head radius along the direction (p,q,w): soft unions and intersections of')
         emit('# superquadrics, a cylinder (the neck) and half-spaces, times exp(sum of bumps).')
         emit(f'hr(p,q,w)={hr_expr()}')
@@ -662,17 +771,22 @@ def build(args):
             tiles(f, cuts, cuts, colors)
         if args.stage == 'final':
             features()
-    emit(f'@view 3d azimuth={args.azimuth} elevation={args.elevation} unit={args.unit} '
-         f'center={args.center}')
+    az, el = X['view']
+    az = az if args.azimuth is None else args.azimuth
+    el = el if args.elevation is None else args.elevation
+    centre = POSE['t'] + POSE['R'] @ np.array([float(c) for c in args.center.split(',')])
+    emit(f'@view 3d azimuth={num(az)} elevation={num(el)} unit={num(args.unit)} '
+         f'center={",".join(num(c, 3).strip("()") for c in centre)}')
     emit(f'@set showAxes=false gridStyle=hidden implicitPrecision={args.prec}')
 
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument('-o', '--out', default='claude-chan-face.arch')
+    ap.add_argument('-o', '--out', help='default: claude-chan-face[-EXPRESSION].arch')
+    ap.add_argument('--expression', choices=EXPRESSIONS, default='base')
     ap.add_argument('--prec', type=float, default=20)
-    ap.add_argument('--azimuth', type=float, default=22)
-    ap.add_argument('--elevation', type=float, default=6)
+    ap.add_argument('--azimuth', type=float, help="default: the expression's view")
+    ap.add_argument('--elevation', type=float)
     ap.add_argument('--unit', type=float, default=210)
     ap.add_argument('--center', default='0,0,-0.3')
     ap.add_argument('--tiles', type=int, default=4, help='tiles per cube face side')
@@ -680,6 +794,10 @@ def main():
                     help='tiles: the bare head with its tiles in two colours; primitives: the '
                          'parts of the head before they are blended')
     args = ap.parse_args()
+    set_expression(args.expression)
+    if not args.out:
+        args.out = 'claude-chan-face' + ('' if args.expression == 'base' else
+                                         f'-{args.expression}') + '.arch'
     build(args)
     with open(args.out, 'w') as fh:
         fh.write('\n'.join(LINES) + '\n')

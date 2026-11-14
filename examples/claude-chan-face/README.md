@@ -6,10 +6,11 @@ Claude Chan's face and head, from the orange-haired character sheet, built only 
 
 | File | |
 |---|---|
-| `claude-chan-face.txt` | The Arch save file. Open it with Arch's *Open file*. |
+| `claude-chan-face.txt` | The Arch save file of the base face. Open it with Arch's *Open file*. |
 | `claude-chan-face.arch` | The scene script it was built from: 141 parametric surfaces and 11 functions. |
-| `generate.py` | Writes the scene script (needs numpy). |
-| `construction.png` | The construction figure below. |
+| `claude-chan-face-natural-smile.txt`, `.arch` | Expression 1 from the sheet, 自然微笑 (natural smile). See [Expressions](#expressions). |
+| `generate.py` | Writes the scene scripts (needs numpy). |
+| `construction.png`, `natural-smile.png` | The figures below. |
 
 The file is saved with `implicitPrecision=20`, so every surface gets Arch's finest mesh (60 x 60 cells). Lower the *equation, inequality and parametric surface precision* setting in Arch for faster redraws while you rotate the head.
 
@@ -92,21 +93,47 @@ The ears are separate shells. Each is a pear-shaped outline in its own frame on 
 - Large amber eyes, as on the sheet: a dark brown rim, an orange body, bright amber lower bands, a dark top under the lid, a dark pupil, one large and one small highlight, both on the viewer's left.
 - A thick, dark upper lash line that thickens toward the outer corner and ends in a wing, plus a short flick below it, a thin lower lash line on the outer half, and a soft lid crease.
 - Thin orange eyebrows, thicker at the inner end.
-- Soft three-step blush on the cheeks, a small pointed nose made by shape alone, and a small closed smile (the sheet's 自然微笑).
+- Soft three-step blush on the cheeks, a small pointed nose made by shape alone, and a small closed smile.
 - A V-shaped jaw with a rounded chin, ears, and a slender neck.
+
+## Expressions
+
+![Expression 1, natural smile: at the sheet's angle, from the front, from the side](natural-smile.png)
+
+Each expression on the character sheet is a set of changes to a few numbers of the face, kept in `EXPRESSIONS` in `generate.py`. The base face is `base`; `--expression NAME` writes `claude-chan-face-NAME.arch`. The surfaces stay the same; only their formulas change:
+
+| Setting | What it changes |
+|---|---|
+| `lid_up`, `lid_lo` | Move the middle of the upper and lower lid curves (by `amount·sin(πt)^0.8`, so the corners stay). The white of the eye, the lash line, the crease and the clamps of the iris all follow, because they are all written with `lidu(s)` and `lidl(s)`. |
+| `under_eye` | Adds the soft fold under the lower lid that a smile pushes up. |
+| `gaze`, `glow_dv` | Move both irises (where she looks) and the bright bands inside them. |
+| `brow_dv` | Raises or lowers the eyebrows. |
+| `mouth` | The mouth line: corner lift, an upturn at the very ends (`hook`), asymmetry, thickness and taper. |
+| `cheek` | Height and size of the cheek bumps in `hr`, so the skin itself changes shape. |
+| `blush_v`, `blush` | Height of the blush and how many of its three steps are drawn. |
+| `tilt` | Head tilt toward her right, in degrees. |
+| `view` | The saved camera angle. |
+
+**1. 自然微笑, natural smile** (`--expression natural-smile`). The upper lids relax down over the top of the iris and the lower lids rise, so the eyes are calm and heavy-lidded. A light fold shows under each eye. The irises and their bright bands move up a little and slightly toward the camera, so she looks at the viewer. The mouth is a nearly straight closed line whose ends turn up. The cheeks are fuller and higher, with only a trace of blush. The head is tilted 12° toward her right, and the camera is a little to her left, as in the sheet's portrait.
+
+The tilt is cheap for the head. A rotation `R` about a point at the top of the neck turns `t + R·(hr(D)·D)` into `t + hr(D)·(R·D)`, so only the direction factor changes. The neck can't turn rigidly, or it would lean. So the tiles that reach into the neck use an angle that grows smoothly with height, `θ(z) = θ·smoothstep(z)`, from still at z = −1.5 to fully turned at z = −0.85. The neck bends, and those tiles still meet the head's tiles exactly.
 
 ## Rebuilding
 
 ```sh
-python3 examples/claude-chan-face/generate.py -o examples/claude-chan-face/claude-chan-face.arch
-node src/cli.js examples/claude-chan-face/claude-chan-face.arch -o examples/claude-chan-face/claude-chan-face.txt --timeout 600
+cd examples/claude-chan-face
+python3 generate.py                                   # writes claude-chan-face.arch
+python3 generate.py --expression natural-smile        # writes claude-chan-face-natural-smile.arch
+node ../../src/cli.js claude-chan-face.arch -o claude-chan-face.txt --timeout 600
+node ../../src/cli.js claude-chan-face-natural-smile.arch -o claude-chan-face-natural-smile.txt --timeout 600
 ```
 
 The build takes a minute or two. Options of `generate.py`:
 
-- `--azimuth`, `--elevation`, `--unit`, `--center`: the saved view.
+- `--expression`: which expression to write (default `base`).
+- `--azimuth`, `--elevation`, `--unit`, `--center`: the saved view (the azimuth and elevation default to the expression's).
 - `--prec`: the mesh fineness (`10` is four times faster for trying changes).
 - `--tiles`: tiles per cube face.
 - `--stage tiles` or `--stage primitives`: the two left panels of the construction figure.
 
-All the shape numbers are in one place in `generate.py`: the primitives (`cranium`, `lowerface`, `neck`, `HEAD`), the bumps (`BUMPS`), and the eye curves (`LID_UP`, `LID_LO`, `LASH_TH`, `BROW`, `IRIS`).
+All the shape numbers are in one place in `generate.py`: the primitives (`cranium`, `lowerface`, `neck`, `HEAD`), the bumps (`BUMPS`), the eye curves (`LID_UP_PTS`, `LID_LO_PTS`, `LASH_TH`, `BROW_PTS`, `IRIS`), and the expressions (`BASE`, `EXPRESSIONS`).
