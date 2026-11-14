@@ -90,7 +90,8 @@ def ellipsoid(C, R, color, ref, fr=None, orient='closed', urange=(0, 'pi'), opac
 # where they lie on it and hang straight below (see hair.py).
 _ry = lambda a: [[math.cos(a), 0, math.sin(a)], [0, 1, 0], [-math.sin(a), 0, math.cos(a)]]
 _rz = lambda a: [[math.cos(a), -math.sin(a), 0], [math.sin(a), math.cos(a), 0], [0, 0, 1]]
-_R = [[sum(_rz(math.radians(-4))[i][m] * _ry(math.radians(-6))[m][j] for m in range(3)) for j in range(3)] for i in range(3)]
+HEAD_YAW, HEAD_ROLL = -4, -13.5     # degrees: turned a little to her right, tilted toward her right shoulder as on the sheet
+_R = [[sum(_rz(math.radians(HEAD_YAW))[i][m] * _ry(math.radians(HEAD_ROLL))[m][j] for m in range(3)) for j in range(3)] for i in range(3)]
 _ax, _ang = axis_angle(_R)
 HEAD_TURN = dict(pivot=(0, 0.12, 11.3), axis=_ax, angle=_ang)
 if want('head') or want('hair') or want('ornament') or want('earrings'):
@@ -205,6 +206,9 @@ if want('earrings'):
 
 if want('hair') or want('ornament'):
     run('hair.py')
+if want('head') and not want('hair'):
+    with sc.turned(**HEAD_TURN):
+        draw_brows([])          # no hair: the brows on the skin only
 
 if want('ornament'):
     sc.blank()

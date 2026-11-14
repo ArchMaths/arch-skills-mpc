@@ -16,26 +16,33 @@ surface precision* slider in Arch's settings for faster redraws while rotating.
 
 ## What is modelled
 
-- **Head**: sculpted from parts, tilted toward her right shoulder and turned a little to her right as on
-  the sheet. The face is a stack of horizontal arcs whose width, depth and
-  roundness change with height, so it has a real profile: forehead, the dip between the eyes, a small
-  pointed nose, lips, a receding chin, and a jawline that runs up to the ear. Seen from the front the
-  outline is a soft chin under full, round cheeks; the round of each cheek, the brow and the eye
-  sockets are shallow bumps and hollows on top. Proportions are measured on the sheet's front-facing
-  face: the jaw follows its outline, and the irises are 0.93 times the eye-to-chin height apart. Under the jaw, the neck, and ears with helix, fold,
-  concha, tragus and lobe.
-- **Face**: long, half-lidded eyes as on the sheet: a thin, nearly level lash line that ends in a wing,
-  a bowl-shaped lower lid, a soft honey iris that is shaded under the lid and light below, a small pupil,
-  two small highlights, a pink-brown tint on the lid, its fold, lower lash line, and thin brows that
-  slope gently outward. A low nose with a highlight above its tip and a soft shadow beside it, a calm
-  closed smile, a faint blush. Skin, iris and hair colours are sampled from the sheet.
+- **Head**: sculpted from parts, tilted 13.5 degrees toward her right shoulder and turned a little to her
+  right, as in the sheet's natural-smile (自然微笑) portrait, which gives her a lively pose. The face is a
+  stack of horizontal arcs whose width, depth and roundness change with height, so it has a real profile:
+  forehead, the dip between the eyes, a small pointed nose, lips, a receding chin, and a jawline that
+  runs up to the ear. Seen from the front the jaw runs nearly straight from the cheekbones to a blunt,
+  rounded chin: the portrait's V-shaped jaw, a little softer so it reads well in 3D. The round of each
+  cheek, the brow and the eye sockets are shallow bumps and hollows on top. Under the jaw, the neck,
+  and ears with helix, fold, concha, tragus and lobe.
+- **Face**: the expression of the natural-smile portrait. Long, heavy-lidded almond eyes, each with its own
+  shape as in the drawing: a bold lash line that starts thin at the inner corner, covers the top quarter of
+  the iris and runs on past the outer corner into a long flat wing; a shallow lower lid drawn as one thin
+  line from a small hook at the inner corner; both corners left open, with white showing between the lash
+  line and the lower lid. A round iris resting on the lower lid, dark mauve-brown under the lid, warm
+  brown in the middle and a peach-gold crescent below, a pupil tucked under the lash line and one small
+  highlight on the viewer's right. Above each eye a pink-brown tint and the fold of the lid. Thin, long,
+  nearly straight brows high above the eyes, carried over the bangs where a lock crosses them, as the
+  sheet draws them. A thin L-shaped line down the side of the nose and under its tip, a highlight above
+  the tip, a calm closed smile and a faint blush. Skin, iris and hair colours are sampled from the sheet.
 - **Hair**: every lock starts at the crown, lies on the head, and falls from there, so the top of the
   hair and the long hair are the same surfaces. Down the back the locks fall straight in three layers;
   at the sides they fan out over the shoulders and arms; in front of the ears thinner locks fall over
-  the chest. Locks wave more toward their ends and finish in a curled tip. Side-swept bangs with a lock
-  between the eyes and thin wisps across the eyes; locks that fall from the temples in front of the
-  cheeks to below the jaw, so the face shows as a soft oval between them; a three-strand braid crown
-  around the back of the head.
+  the chest. Locks wave more toward their ends and finish in a curled tip. The bangs follow the
+  portrait: one wide lock sweeps from her upper right down to a point at the bridge of the nose, the
+  forehead shows in a tall triangle above her left eye, a lock sweeps over her left temple, and a smaller
+  gap above her right eye is framed by the locks at the side. Locks fall from the temples to below the
+  jaw: beside the face on her right, so the whole jaw line shows, and over the outer cheek on her left.
+  A three-strand braid crown around the back of the head.
 - **Accessories**: a chrysanthemum on a black bow with cream ribbons and a gold tassel above her left
   ear; gold tassel earrings.
 - **Outfit**: high ruffled collar and jabot, black ascot with a chrysanthemum brooch, cream capelet with
@@ -70,8 +77,17 @@ node src/cli.js examples/claude-chan/claude-chan-3d.arch -o examples/claude-chan
   own fine mesh and no seam shows.
 - **Eyes, brows, mouth** are thin decals that follow the face. Arch expands user functions as text, so
   a decal that called the full face function with a long argument would grow to thousands of terms;
-  `generate.py` fits the face over the eye and brow regions with small polynomials (within 0.001) and
+  `generate.py` fits the face over the eye and brow regions with small polynomials (within 0.002) and
   the decals use those.
+- **Matching the portrait.** The eye, brow, nose and mouth outlines were traced over the natural-smile
+  portrait, placed on the model by its pupils and projected onto this face from the portrait's angle, so
+  they land where the drawing puts them with the head's tilt and turn accounted for. Each eye keeps the
+  points measured that way (`EYES` in `face.py`): its upper lid, the top of its lash line and its lower
+  lid, relative to its own iris, written for Arch as one short polynomial each. The bangs were placed the
+  same way, against the portrait's border between hair and skin.
+- **Brows over the hair.** Each brow is a decal on the skin; where a lock of the bangs crosses it, the
+  generator samples the front of that lock along the brow and adds a short strip just in front of it,
+  so the brow shows over the hair from the front and three-quarter views.
 - **Hair.** A lock is a tube around a flow line on one guiding surface: a dome around the head for the
   first part of its length `t`, then an ellipse whose half-axes `hrx(t)`, `hry(t)` are fitted so the
   hair clears the shoulders, capelet, arms, book and skirt everywhere (the generator prints the
