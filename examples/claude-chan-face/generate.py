@@ -33,6 +33,7 @@ Each expression of the character sheet is a set of changes to the face (EXPRESSI
 """
 import argparse
 import math
+import sys
 
 import numpy as np
 
@@ -812,6 +813,7 @@ PARTS = [('pc', cranium, '#e9c4ae', 'skull: a superquadric'),
 
 
 def build(args):
+    span = None
     if args.stage == 'primitives':
         emit('@title Claude Chan - face: the primitives')
         emit('# Each primitive drawn on its own, before the soft union blends them into one head')
@@ -836,12 +838,26 @@ def build(args):
                 colors = (SKIN,)
             tiles(f, cuts, cuts, colors)
         if args.stage == 'final':
-            features()
+            if not args.bare:
+                features()
+            if args.hair:
+                import hair
+                span = hair.build(sys.modules[__name__])
+                print(f'  hair spans {np.round(span[0], 2)} to {np.round(span[1], 2)}')
+    if span is not None and args.unit is None and args.center is None:
+        # Arch clips a 3D scene to a box about 246/unit on each side of the view centre: the
+        # box is fitted around the hair (the head lies inside it)
+        lo, hi = span
+        centre = (lo + hi) / 2
+        unit = math.floor(246 / (np.max(hi - lo) / 2 + 0.04))
+    else:
+        unit = args.unit or 185
+        centre = POSE['t'] + POSE['R'] @ np.array([float(c) for c in
+                                                   (args.center or '0,0,-0.1').split(',')])
     az, el = X['view']
     az = az if args.azimuth is None else args.azimuth
     el = el if args.elevation is None else args.elevation
-    centre = POSE['t'] + POSE['R'] @ np.array([float(c) for c in args.center.split(',')])
-    emit(f'@view 3d azimuth={num(az)} elevation={num(el)} unit={num(args.unit)} '
+    emit(f'@view 3d azimuth={num(az)} elevation={num(el)} unit={num(unit)} '
          f'center={",".join(num(c, 3).strip("()") for c in centre)}')
     emit(f'@set showAxes=false gridStyle=hidden implicitPrecision={args.prec}')
 
@@ -853,12 +869,14 @@ def main():
     ap.add_argument('--prec', type=float, default=20)
     ap.add_argument('--azimuth', type=float, help="default: the expression's view")
     ap.add_argument('--elevation', type=float)
-    ap.add_argument('--unit', type=float, default=185)
-    ap.add_argument('--center', default='0,0,-0.1')
+    ap.add_argument('--unit', type=float, help='default: fit the whole head and hair')
+    ap.add_argument('--center', help='default: the middle of the head and hair')
     ap.add_argument('--tiles', type=int, default=4, help='tiles per cube face side')
     ap.add_argument('--stage', choices=('final', 'tiles', 'primitives'), default='final',
                     help='tiles: the bare head with its tiles in two colours; primitives: the '
                          'parts of the head before they are blended')
+    ap.add_argument('--no-hair', dest='hair', action='store_false')
+    ap.add_argument('--bare', action='store_true', help='leave out the face (quick hair previews)')
     args = ap.parse_args()
     set_expression(args.expression)
     if not args.out:
