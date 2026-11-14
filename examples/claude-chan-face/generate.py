@@ -419,7 +419,10 @@ class Curve:
         t, y = zip(*pts)
         f = spline(t, y)
         xs = np.linspace(t[0], t[-1], 400)
-        self.c = np.polynomial.polynomial.polyfit(xs, f(xs), deg)
+        # the ends are held (almost) exactly, so curves that share a corner meet there
+        wts = np.ones_like(xs)
+        wts[[0, -1]] = 1000
+        self.c = np.polynomial.polynomial.polyfit(xs, f(xs), deg, w=wts)
         err = np.max(np.abs(np.polynomial.polynomial.polyval(xs, self.c) - f(xs)))
         if err > 0.005:
             print(f'warning: curve {name} fits its control points to within {err:.4f} only')
@@ -464,14 +467,14 @@ def clamp(v, lo, hi):
 # The left eye, in front-face coordinates.  t = 0 at the inner corner, 1 at the outer corner;
 # the lid curves give v relative to EYE_V.
 EYE_U0, EYE_UW, EYE_V = 0.155, 0.46, -0.16
-LID_UP_PTS = [(0, 0.0), (0.08, 0.07), (0.25, 0.13), (0.45, 0.148), (0.65, 0.138), (0.82, 0.106),
-              (0.93, 0.064), (1.0, 0.022)]
-LID_LO_PTS = [(0, 0.0), (0.1, -0.05), (0.3, -0.1), (0.5, -0.118), (0.7, -0.112), (0.85, -0.083),
-              (0.95, -0.04), (1.0, 0.022)]
-BROW_PTS = [(-0.05, 0.28), (0.2, 0.318), (0.5, 0.334), (0.8, 0.322), (1.05, 0.286)]
-LASH_TH = Curve([(0, 0.005), (0.15, 0.02), (0.4, 0.032), (0.7, 0.042), (0.9, 0.052),
-                 (1.0, 0.056)], deg=4, name='lasht')
-IRIS = dict(t=0.47, dv=-0.014, a=0.118, b=0.166)
+LID_UP_PTS = [(0, 0.0), (0.06, 0.045), (0.18, 0.085), (0.4, 0.105), (0.6, 0.11), (0.8, 0.1),
+              (0.92, 0.072), (1.0, 0.035)]
+LID_LO_PTS = [(0, 0.0), (0.12, -0.04), (0.35, -0.075), (0.55, -0.085), (0.75, -0.075),
+              (0.9, -0.045), (1.0, 0.035)]
+BROW_PTS = [(-0.05, 0.255), (0.25, 0.275), (0.55, 0.283), (0.85, 0.275), (1.05, 0.262)]
+LASH_TH = Curve([(0, 0.006), (0.1, 0.016), (0.3, 0.026), (0.6, 0.034), (0.85, 0.04),
+                 (1.0, 0.04)], deg=4, name='lasht')
+IRIS = dict(t=0.47, dv=0.03, a=0.105, b=0.13)
 MOUTH_V = -0.68
 
 # ---------------------------------------------------------------- pose
@@ -524,7 +527,8 @@ BASE = dict(
     lid_lo=0.0,            # the middle of the lower lid moves by this (positive = up)
     under_eye=False,       # the soft fold under the lower lid that a smile pushes up
     gaze=(0.0, 0.0),       # (u, v) shift of both irises: where she looks
-    glow_dv=(-0.05, -0.07),  # how far below the iris centre its two bright bands sit
+    converge=0.0,          # extra shift of each iris toward the nose
+    glow_dv=(-0.045, -0.065),  # how far below the iris centre its two bright bands sit
     brow_dv=0.0,           # eyebrows up (+) or down (-)
     mouth=dict(w=0.1, lift=0.024, hook=0.0, asym=0.0, th=0.011, taper=0.7),
     cheek=(-0.40, 0.02),   # height and amplitude of the cheek bumps
@@ -538,9 +542,9 @@ EXPRESSIONS = {
     # 自然微笑, the first expression on the sheet: relaxed upper lids, lower lids pushed up by
     # the cheeks, eyes on the viewer, a closed smile, the head tilted toward her right.
     'natural-smile': dict(
-        title='Claude Chan - natural smile', lid_up=-0.04, lid_lo=0.04, under_eye=True,
-        gaze=(0.015, 0.01), glow_dv=(-0.03, -0.045), brow_dv=0.008,
-        mouth=dict(w=0.1, lift=0.016, hook=0.01, asym=0.003, th=0.008, taper=0.35),
+        title='Claude Chan - natural smile', lid_up=-0.025, lid_lo=0.025, under_eye=True,
+        gaze=(-0.014, 0.0), converge=0.009, brow_dv=0.005,
+        mouth=dict(w=0.12, lift=0.006, hook=0.005, asym=0.004, th=0.008, taper=0.35),
         cheek=(-0.37, 0.03), blush_v=-0.40, blush=1, tilt=12, view=(8, 6)),
 }
 X = dict(BASE)
@@ -624,32 +628,34 @@ def eye(mirror):
     decal(U, f'max({top}-0.04*(1-w),{bot})', lv(2), s, w, '#e4d5dc', mirror)
     # iris: dark rim, amber body, bright lower half, the lid's shadow, pupil, highlights
     gu, gv = X['gaze']
-    cu = EYE_U0 + EYE_UW * IRIS['t'] + (-gu if mirror else gu)   # mirror flips u
+    gu = (-gu if mirror else gu) - X['converge']     # mirror flips u; the nose is at u = 0
+    cu = EYE_U0 + EYE_UW * IRIS['t'] + gu
     cv = EYE_V + IRIS['dv'] + gv
     a, b = IRIS['a'], IRIS['b']
-    ellipse(cu, cv, a, b, lv(3), '#6a2a10', mirror, lid_lo, lid_hi)
-    ellipse(cu, cv, 0.86 * a, 0.89 * b, lv(4), '#c0561a', mirror, lid_lo, lid_hi)
+    ellipse(cu, cv, a, b, lv(3), '#5e2c14', mirror, lid_lo, lid_hi)
+    ellipse(cu, cv, 0.86 * a, 0.89 * b, lv(4), '#b4612a', mirror, lid_lo, lid_hi)
     g1, g2 = X['glow_dv']
-    ellipse(cu, cv + g1, 0.66 * a, 0.5 * b, lv(5), '#e9892e', mirror, lid_lo, lid_hi)
-    ellipse(cu, cv + g2, 0.48 * a, 0.3 * b, lv(6), '#f7b24a', mirror, lid_lo, lid_hi)
-    ellipse(cu, cv, 0.86 * a, 0.89 * b, lv(7), '#4a1c0a', mirror,
-            lambda U: lid_hi(U, -0.06), lid_hi)
-    ellipse(cu, cv + 0.012, 0.34 * a, 0.44 * b, lv(8), '#2e1206', mirror, lid_lo, lid_hi)
-    hx = -0.045 if not mirror else 0.045      # both highlights on the viewer's left
-    ellipse(cu + hx, cv + 0.055, 0.034, 0.044, lv(9), '#fffdf8', mirror, lid_lo, lid_hi)
-    ellipse(cu - 1.1 * hx, cv - 0.085, 0.018, 0.013, lv(9), '#fff4e6', mirror, lid_lo, lid_hi)
+    ellipse(cu, cv + g1, 0.66 * a, 0.5 * b, lv(5), '#d08a46', mirror, lid_lo, lid_hi)
+    ellipse(cu, cv + g2, 0.48 * a, 0.3 * b, lv(6), '#e8b06a', mirror, lid_lo, lid_hi)
+    ellipse(cu, cv, 0.86 * a, 0.89 * b, lv(7), '#4a2412', mirror,
+            lambda U: lid_hi(U, -0.05), lid_hi)
+    # the pupil sits high, just under the lid, with a small highlight beside it
+    ellipse(cu, cv + 0.03, 0.34 * a, 0.36 * b, lv(8), '#2e140a', mirror, lid_lo, lid_hi)
+    hx = -0.022 if not mirror else 0.022      # both highlights on the viewer's left
+    ellipse(cu + hx, cv + 0.04, 0.02, 0.025, lv(9), '#fffdf8', mirror, lid_lo, lid_hi)
+    ellipse(cu - 1.6 * hx, cv - 0.055, 0.012, 0.009, lv(9), '#fff4e6', mirror, lid_lo, lid_hi)
     # upper lash line: a raised band along the upper lid, thickest at the outer corner
     ridge = f'{lv(10)}+0.01*sin(pi*w)'
     decal(U, f'{top}-0.009+w*(lasht(s)+0.009)', ridge, s, w, '#2e1c18', mirror)
     # its wing past the outer corner, and a smaller lash below it
     v1 = lid_point(1.0)[1]
-    lo0, hi0, tip, ln = v1 - 0.009, v1 + LASH_TH.c @ np.ones(len(LASH_TH.c)), v1 - 0.03, 0.18
+    lo0, hi0, tip, ln = v1 - 0.009, v1 + LASH_TH.c @ np.ones(len(LASH_TH.c)), v1 + 0.012, 0.2
     f = f'(s-1)*{num(1 / ln)}'
     lo = f'{num(lo0)}+{f}*{num(tip - lo0)}'
     hi = f'{num(hi0)}+{f}^0.75*{num(tip - hi0)}'
     decal(U, f'{lo}+w*({hi}-({lo}))', ridge, ('s', 1, 1 + ln), w, '#2e1c18', mirror)
-    quad_patch(lid_point(0.80, -0.008), lid_point(0.95, -0.006), (EYE_U0 + EYE_UW * 1.1, v1 - 0.08),
-               (EYE_U0 + EYE_UW * 1.1, v1 - 0.08), lv(10), '#2e1c18', mirror)
+    quad_patch(lid_point(0.86, -0.008), lid_point(0.96, -0.006), (EYE_U0 + EYE_UW * 1.1, v1 - 0.04),
+               (EYE_U0 + EYE_UW * 1.1, v1 - 0.04), lv(10), '#2e1c18', mirror)
     # lower lash line on the outer half, and the crease of the upper lid
     f = '(s-0.4)*1.6667'
     decal(U, f'{bot}+0.004-w*0.024*{f}*(1-{f})^0.6', lv(10), ('s', 0.4, 1), w, '#7a4030',
@@ -663,7 +669,7 @@ def eye(mirror):
         decal(U, f'{bot}-0.032+w*0.006*4*{f}*(1-{f})', lv(2), ('s', 0.35, 0.9), w, '#ebc2b4',
               mirror)
     # eyebrow: thick at the inner end, tapering outward
-    th = '(0.026-0.02*(s+0.05)*0.9091)'
+    th = '(0.018-0.012*(s+0.05)*0.9091)'
     decal(U, f'{num(EYE_V)}+brow(s)-{th}/2+w*{th}', lv(2), ('s', -0.05, 1.05), w, '#c4642e',
           mirror)
     # blush on the cheek, in three soft steps

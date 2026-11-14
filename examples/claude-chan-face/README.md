@@ -79,7 +79,7 @@ P = dX(U, V, L) * (1, U, V),   dX(a,b,c) = hX(a,b) * (1 + c)
 ```
 
 - **Layers.** Each layer is lifted by its own multiple of 0.16 % of the radius (sclera 1, lid shadow 2, iris rim 3, … highlights 9, lash line 10). The layers therefore stack in a fixed order in Arch's single depth buffer, without flicker.
-- **Strips.** The white of the eye, the lash line, the lower lash, the lid crease, the brows and the mouth are strips: `U = u₀ + width·s`, and `V` runs from a lower curve to an upper curve in `s`. The lid curves `lidu(s)` and `lidl(s)` are smooth polynomials fitted to a few control points. Every layer of the eye uses the same two functions, so the layers line up exactly.
+- **Strips.** The white of the eye, the lash line, the lower lash, the lid crease, the brows and the mouth are strips: `U = u₀ + width·s`, and `V` runs from a lower curve to an upper curve in `s`. The lid curves `lidu(s)` and `lidl(s)` are smooth polynomials fitted to a few control points, held exactly at their ends so that the two lids meet at both corners. Every layer of the eye uses the same two functions, so the layers line up exactly.
 - **Clamped ellipses.** The iris layers (dark rim, amber body, two bright lower bands, the lid's shadow), the pupil and the highlights are ellipses in polar form. Their `V` is clamped between the two lids, `min(max(V, lidl), lidu)`. Points outside the eye collapse onto the lid line, so the iris is cut by the lids exactly, as in the drawing.
 - **A raised lash line.** The upper lash band's lift grows across its width, `L = 0.016 + 0.01·sin(πw)`. The lash line is therefore a small ridge, not paint, and catches the light like the edge of an eyelid. A wing past the outer corner and a smaller flick below it are drawn the same way.
 - **Shorter radius functions per region.** The decals of the eyes and brows (`he`), the cheeks (`hc`) and the mouth (`hm`) each get their own copy of `hr`, specialised to `p = 1`. Each copy leaves out every primitive and bump that changes the radius by less than 10⁻⁶ in that region; the generator checks that each copy still matches `hr` to within 2·10⁻⁵. This cut the meshing time of the decals several times over.
@@ -90,9 +90,9 @@ The ears are separate shells. Each is a pear-shaped outline in its own frame on 
 
 ## What is on the face
 
-- Large amber eyes, as on the sheet: a dark brown rim, an orange body, bright amber lower bands, a dark top under the lid, a dark pupil, one large and one small highlight, both on the viewer's left.
-- A thick, dark upper lash line that thickens toward the outer corner and ends in a wing, plus a short flick below it, a thin lower lash line on the outer half, and a soft lid crease.
-- Thin orange eyebrows, thicker at the inner end.
+- Almond-shaped amber eyes, as on the sheet: a dark brown rim, an amber-brown body, lighter lower bands, a dark top under the lid. The pupil sits high, just under the upper lid, with a small highlight beside it and a smaller one lower down, both on the viewer's left.
+- A thick, dark, nearly flat upper lash line, heaviest over its outer two thirds, ending in a pointed wing straight out past the corner, with a short flick below it. There is also a thin lower lash line on the outer half and a soft lid crease.
+- Thin, nearly straight orange eyebrows, a little thicker at the inner end.
 - Soft three-step blush on the cheeks, a small pointed nose made by shape alone, and a small closed smile.
 - A V-shaped jaw with a rounded chin, ears, and a slender neck.
 
@@ -106,7 +106,7 @@ Each expression on the character sheet is a set of changes to a few numbers of t
 |---|---|
 | `lid_up`, `lid_lo` | Move the middle of the upper and lower lid curves (by `amount·sin(πt)^0.8`, so the corners stay). The white of the eye, the lash line, the crease and the clamps of the iris all follow, because they are all written with `lidu(s)` and `lidl(s)`. |
 | `under_eye` | Adds the soft fold under the lower lid that a smile pushes up. |
-| `gaze`, `glow_dv` | Move both irises (where she looks) and the bright bands inside them. |
+| `gaze`, `converge`, `glow_dv` | Move both irises (where she looks), move each one toward the nose, and move the bright bands inside them. |
 | `brow_dv` | Raises or lowers the eyebrows. |
 | `mouth` | The mouth line: corner lift, an upturn at the very ends (`hook`), asymmetry, thickness and taper. |
 | `cheek` | Height and size of the cheek bumps in `hr`, so the skin itself changes shape. |
@@ -114,7 +114,7 @@ Each expression on the character sheet is a set of changes to a few numbers of t
 | `tilt` | Head tilt toward her right, in degrees. |
 | `view` | The saved camera angle. |
 
-**1. 自然微笑, natural smile** (`--expression natural-smile`). The upper lids relax down over the top of the iris and the lower lids rise, so the eyes are calm and heavy-lidded. A light fold shows under each eye. The irises and their bright bands move up a little and slightly toward the camera, so she looks at the viewer. The mouth is a nearly straight closed line whose ends turn up. The cheeks are fuller and higher, with only a trace of blush. The head is tilted 12° toward her right, and the camera is a little to her left, as in the sheet's portrait.
+**1. 自然微笑, natural smile** (`--expression natural-smile`). The upper lids relax down over the top of the iris and the lower lids rise, so the eyes are calm and heavy-lidded. A light fold shows under each eye. The irises sit a little toward the nose, more in her left eye, as on the sheet, so she looks at the viewer. The pupils show as dark spots just under the lids. The mouth is a nearly straight, slightly longer closed line whose ends turn up a little, her left end more. The cheeks are fuller and higher, with only a trace of blush. The head is tilted 12° toward her right, and the camera is a little to her left, as in the sheet's portrait.
 
 The tilt is cheap for the head. A rotation `R` about a point at the top of the neck turns `t + R·(hr(D)·D)` into `t + hr(D)·(R·D)`, so only the direction factor changes. The neck can't turn rigidly, or it would lean. So the tiles that reach into the neck use an angle that grows smoothly with height, `θ(z) = θ·smoothstep(z)`, from still at z = −1.5 to fully turned at z = −0.85. The neck bends, and those tiles still meet the head's tiles exactly.
 
