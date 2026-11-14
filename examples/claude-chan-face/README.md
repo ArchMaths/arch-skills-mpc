@@ -90,8 +90,12 @@ The ears are separate shells. Each is a pear-shaped outline in its own frame on 
 
 ## What is on the face
 
-- Amber eyes shaped as on the sheet: a nearly straight upper lid with both corners up near it, and the eye hanging below it like a bowl. The iris has a dark brown rim, an amber-brown body, lighter lower bands, a dark top under the lid. The pupil sits high, just under the upper lid, with a small highlight beside it and a smaller one lower down, both on the viewer's left.
-- A thick, dark, flat upper lash line. It starts thick at the inner corner with a short hook down into it, and ends in a short wing past the outer corner, pointing out and a little down. The lower lash line thickens toward the outer corner, where it meets the wing. There is also a soft lid crease.
+- Amber eyes, measured on the sheet (her left eye in the calm portrait, in eye widths):
+  - The upper lid arches gently, about 0.055 above the corners.
+  - The lower lid is deepest just past the middle (0.29) and rises in a round curve to the outer corner: 0.24 deep at t = 0.7, 0.17 at 0.85, 0.08 at 0.95.
+  - The iris is 0.57 across and sits a little toward the nose (t = 0.44), its centre just under the lid, so its top is hidden. It has a dark brown rim, an amber-brown body, a dark top and lighter bands near the lower lid.
+  - The pupil is large, 0.58 of the iris across, just under the lid, with a highlight on its left and a smaller one on its right.
+- A thick, dark upper lash line, heaviest over the middle and outer third, so its top edge arches as on the sheet. It starts thick at the inner corner with a short hook down into it, and ends in a short wing past the outer corner, pointing out and a little down. The lower lash line thickens toward the outer corner, where it meets the wing. There is also a soft lid crease.
 - Thin, nearly straight orange eyebrows, a little thicker at the inner end.
 - Soft three-step blush on the cheeks, a small pointed nose made by shape alone, and a small closed smile.
 - A V-shaped jaw with a rounded chin, ears, and a slender neck.
@@ -115,7 +119,7 @@ Each expression on the character sheet is a set of changes to a few numbers of t
 | `tilt`, `pitch` | Head tilt toward her right and how far she looks up, in degrees (`pitch` is 10 for every expression). |
 | `view` | The saved camera angle. |
 
-**1. 自然微笑, natural smile** (`--expression natural-smile`). The upper lids relax down over the top of the iris and the lower lids rise, so the eyes are calm and heavy-lidded. A light fold shows under each eye. The irises sit a little toward the nose, more in her left eye, as on the sheet, so she looks at the viewer. The pupils show as dark spots just under the lids. The mouth is a nearly straight, slightly longer closed line whose ends turn up a little, her left end more. The cheeks are fuller and higher, with only a trace of blush. The head is tilted 12° toward her right as well as looking up, and the camera is a little to her left, as in the sheet's portrait.
+**1. 自然微笑, natural smile** (`--expression natural-smile`). The upper lids come down a little and the lower lids rise (the sheet's smile is 0.26 eye widths deep against 0.29 when calm), so the eyes are calm and gentle. A light fold shows under each eye. She looks straight ahead, with the irises where they are in the base face. The mouth is a nearly straight, slightly longer closed line whose ends turn up a little, her left end more. The cheeks are fuller and higher, with only a trace of blush. The head is tilted 12° toward her right as well as looking up, and the camera is a little to her left, as in the sheet's portrait.
 
 The pose is cheap for the head. A rotation `R` (look up, then tilt) about a point at the top of the neck turns `t + R·(hr(D)·D)` into `t + hr(D)·(R·D)`, so only the direction factor changes. The look-up turns the neck with the head. For the tilt, the neck can't turn rigidly, or it would lean. So the tiles that reach into the neck use a tilt angle that grows smoothly with height, `θ(z) = θ·smoothstep(z)`, from still at z = −1.5 to fully turned at z = −0.85. The neck bends, and those tiles still meet the head's tiles exactly.
 

@@ -467,16 +467,19 @@ def clamp(v, lo, hi):
 # The left eye, in front-face coordinates.  t = 0 at the inner corner, 1 at the outer corner;
 # the lid curves give v relative to EYE_V.
 EYE_U0, EYE_UW, EYE_V = 0.155, 0.46, -0.16
-# As on the sheet, the upper lid is nearly straight, with both corners up near it, and the eye
-# hangs below it like a bowl.
-LID_UP_PTS = [(0, 0.06), (0.1, 0.085), (0.3, 0.098), (0.5, 0.103), (0.7, 0.1), (0.9, 0.09),
-              (1.0, 0.075)]
-LID_LO_PTS = [(0, 0.06), (0.06, 0.0), (0.2, -0.05), (0.4, -0.075), (0.6, -0.08), (0.8, -0.06),
-              (0.93, -0.01), (1.0, 0.075)]
+# Measured on the sheet (her left eye in the calm portrait, in eye widths, times the eye width
+# 0.46): the upper lid arches gently, about 0.025 above the corners; the lower lid is deepest
+# near the middle (0.29 eye widths) and rises in a round curve to the outer corner.
+LID_UP_PTS = [(0, 0.06), (0.15, 0.077), (0.3, 0.082), (0.5, 0.085), (0.7, 0.083), (0.85, 0.078),
+              (1.0, 0.065)]
+LID_LO_PTS = [(0, 0.06), (0.1, 0.011), (0.25, -0.044), (0.4, -0.072), (0.55, -0.072),
+              (0.7, -0.049), (0.85, -0.016), (0.95, 0.03), (1.0, 0.065)]
 BROW_PTS = [(-0.05, 0.255), (0.25, 0.275), (0.55, 0.283), (0.85, 0.275), (1.05, 0.262)]
-LASH_TH = Curve([(0, 0.012), (0.08, 0.022), (0.3, 0.028), (0.6, 0.034), (0.85, 0.04),
-                 (1.0, 0.04)], deg=4, name='lasht')
-IRIS = dict(t=0.47, dv=0.03, a=0.105, b=0.13)
+# the lash band is thickest over the middle and outer third, so its top edge arches too
+LASH_TH = Curve([(0, 0.027), (0.12, 0.038), (0.3, 0.044), (0.48, 0.05), (0.65, 0.057),
+                 (0.77, 0.057), (0.89, 0.05), (1.0, 0.042)], deg=6, name='lasht')
+# the iris is 0.57 eye widths across, a little toward the nose, its centre just under the lid
+IRIS = dict(t=0.44, dv=0.058, a=0.131, b=0.135)
 MOUTH_V = -0.68
 
 # ---------------------------------------------------------------- pose
@@ -546,7 +549,7 @@ BASE = dict(
     under_eye=False,       # the soft fold under the lower lid that a smile pushes up
     gaze=(0.0, 0.0),       # (u, v) shift of both irises: where she looks
     converge=0.0,          # extra shift of each iris toward the nose
-    glow_dv=(-0.045, -0.065),  # how far below the iris centre its two bright bands sit
+    glow_dv=(-0.07, -0.085),   # how far below the iris centre its two bright bands sit
     brow_dv=0.0,           # eyebrows up (+) or down (-)
     mouth=dict(w=0.1, lift=0.024, hook=0.0, asym=0.0, th=0.011, taper=0.7),
     cheek=(-0.40, 0.02),   # height and amplitude of the cheek bumps
@@ -561,8 +564,8 @@ EXPRESSIONS = {
     # 自然微笑, the first expression on the sheet: relaxed upper lids, lower lids pushed up by
     # the cheeks, eyes on the viewer, a closed smile, the head tilted toward her right.
     'natural-smile': dict(
-        title='Claude Chan - natural smile', lid_up=-0.012, lid_lo=0.022, under_eye=True,
-        gaze=(-0.014, 0.0), converge=0.009, brow_dv=0.005,
+        title='Claude Chan - natural smile', lid_up=-0.006, lid_lo=0.012, under_eye=True,
+        brow_dv=0.005,
         mouth=dict(w=0.12, lift=0.006, hook=0.005, asym=0.004, th=0.008, taper=0.35),
         cheek=(-0.37, 0.03), blush_v=-0.40, blush=1, tilt=12, view=(8, 2)),
 }
@@ -654,15 +657,16 @@ def eye(mirror):
     ellipse(cu, cv, a, b, lv(3), '#5e2c14', mirror, lid_lo, lid_hi)
     ellipse(cu, cv, 0.86 * a, 0.89 * b, lv(4), '#b4612a', mirror, lid_lo, lid_hi)
     g1, g2 = X['glow_dv']
-    ellipse(cu, cv + g1, 0.66 * a, 0.5 * b, lv(5), '#d08a46', mirror, lid_lo, lid_hi)
-    ellipse(cu, cv + g2, 0.48 * a, 0.3 * b, lv(6), '#e8b06a', mirror, lid_lo, lid_hi)
+    ellipse(cu, cv + g1, 0.62 * a, 0.4 * b, lv(5), '#d08a46', mirror, lid_lo, lid_hi)
+    ellipse(cu, cv + g2, 0.42 * a, 0.22 * b, lv(6), '#e8b06a', mirror, lid_lo, lid_hi)
     ellipse(cu, cv, 0.86 * a, 0.89 * b, lv(7), '#4a2412', mirror,
             lambda U: lid_hi(U, -0.05), lid_hi)
-    # the pupil sits high, just under the lid, with a small highlight beside it
-    ellipse(cu, cv + 0.03, 0.34 * a, 0.36 * b, lv(8), '#2e140a', mirror, lid_lo, lid_hi)
-    hx = -0.022 if not mirror else 0.022      # both highlights on the viewer's left
-    ellipse(cu + hx, cv + 0.04, 0.02, 0.025, lv(9), '#fffdf8', mirror, lid_lo, lid_hi)
-    ellipse(cu - 1.6 * hx, cv - 0.055, 0.012, 0.009, lv(9), '#fff4e6', mirror, lid_lo, lid_hi)
+    # the pupil is large (0.58 of the iris across) and sits just under the lid; a highlight
+    # on its left, a smaller one on its right
+    ellipse(cu, cv + 0.005, 0.58 * a, 0.4 * b, lv(8), '#2e140a', mirror, lid_lo, lid_hi)
+    hx = -1 if not mirror else 1              # the main highlight on the viewer's left
+    ellipse(cu + 0.012 * hx, cv + 0.004, 0.024, 0.017, lv(9), '#fffdf8', mirror, lid_lo, lid_hi)
+    ellipse(cu - 0.052 * hx, cv + 0.002, 0.011, 0.009, lv(9), '#fff4e6', mirror, lid_lo, lid_hi)
     # upper lash line: a raised band along the upper lid, thickest at the outer corner
     ridge = f'{lv(10)}+0.01*sin(pi*w)'
     decal(U, f'{top}-0.009+w*(lasht(s)+0.009)', ridge, s, w, '#2e1c18', mirror)
