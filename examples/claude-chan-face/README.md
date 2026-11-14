@@ -95,7 +95,11 @@ The ears are separate shells. Each is a pear-shaped outline in its own frame on 
   - The lower lid is deepest just past the middle (0.29) and rises in a round curve to the outer corner: 0.24 deep at t = 0.7, 0.17 at 0.85, 0.08 at 0.95.
   - The iris is 0.57 across and sits a little toward the nose (t = 0.44), its centre just under the lid, so its top is hidden. It has a dark brown rim, an amber-brown body, a dark top and lighter bands near the lower lid.
   - The pupil is large, 0.58 of the iris across, just under the lid, with a highlight on its left and a smaller one on its right.
-- A thick, dark upper lash line, heaviest over the middle and outer third, so its top edge arches as on the sheet. It starts thick at the inner corner with a short hook down into it, and ends in a short wing past the outer corner, pointing out and a little down. The lower lash line thickens toward the outer corner, where it meets the wing. There is also a soft lid crease.
+- A fine, dark upper lash line that follows the lid in one smooth arc.
+  - It is a hairline at the inner corner, with a slim tail down into the corner. It grows steadily to its thickest at 0.8 of the way out: 0.033 in all, about a fourteenth of the eye width. Its top edge arches with the lid.
+  - It ends in a thin flick that reaches 0.18 eye widths past the outer corner, pointing out and a little down, and tapers to a point.
+  - On the sheet, which is shrunk about five times, the line's short lashes blur into a band about 0.15 eye widths thick. At full size it reads as a fine line with lashes, and the model draws that line.
+  - The lower lash line thickens toward the outer corner, where it meets the flick. A soft lid crease runs above the lash line.
 - Thin brown eyebrows, measured on the sheet. Each is a fine line about 0.63 eye widths above the eye corners, nearly level over the inner half of the eye, where the sheet shows it between the strands of hair. It is rounded at the inner end, thickest a third of the way out (0.011, about a fortieth of the eye width) and tapers to a point at the outer end. Its control points are solved so that from the front it is a smooth parabolic arch. They rise toward the outer end, because there the forehead curves back and would otherwise pull the line down on screen.
 - Soft three-step blush on the cheeks, a small pointed nose made by shape alone, and a small closed smile.
 - A V-shaped jaw with a rounded chin, ears, and a slender neck.

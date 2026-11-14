@@ -483,9 +483,15 @@ BROW_PTS = [(-0.08, 0.2841), (0.1, 0.2953), (0.3, 0.3046), (0.45, 0.3093), (0.65
             (0.85, 0.309), (1.06, 0.299)]
 BROW_T = (-0.08, 1.06)   # where it starts and ends, in eye widths from the inner corner
 BROW_TH = 0.011          # its thickest point, a third of the way out
-# the lash band is thickest over the middle and outer third, so its top edge arches too
-LASH_TH = Curve([(0, 0.027), (0.12, 0.038), (0.3, 0.044), (0.48, 0.05), (0.65, 0.057),
-                 (0.77, 0.057), (0.89, 0.05), (1.0, 0.042)], deg=6, name='lasht')
+# The upper lash line is a fine line along the lid: a hairline at the inner corner, growing
+# smoothly to its thickest at 0.8 of the way out, so its top edge arches with the lid.  It
+# reaches LASH_OVER below the lid curve, onto the top of the eye.  (On the sheet, which is
+# shrunk about five times, its short lashes blur into a band about 0.15 eye widths thick; at
+# full size it is a fine line with lashes.)
+LASH_TH = Curve([(0, 0.005), (0.1, 0.009), (0.25, 0.014), (0.45, 0.02), (0.65, 0.026),
+                 (0.8, 0.029), (0.92, 0.028), (1.0, 0.025)], deg=6, name='lasht')
+LASH_OVER = 0.004
+LASH_WING = 0.18         # how far its flick reaches past the outer corner, in eye widths
 # the iris is 0.57 eye widths across, a little toward the nose, its centre just under the lid
 IRIS = dict(t=0.44, dv=0.058, a=0.131, b=0.135)
 MOUTH_V = -0.68
@@ -675,19 +681,22 @@ def eye(mirror):
     hx = -1 if not mirror else 1              # the main highlight on the viewer's left
     ellipse(cu + 0.012 * hx, cv + 0.004, 0.024, 0.017, lv(9), '#fffdf8', mirror, lid_lo, lid_hi)
     ellipse(cu - 0.052 * hx, cv + 0.002, 0.011, 0.009, lv(9), '#fff4e6', mirror, lid_lo, lid_hi)
-    # upper lash line: a raised band along the upper lid, thickest at the outer corner
-    ridge = f'{lv(10)}+0.01*sin(pi*w)'
-    decal(U, f'{top}-0.009+w*(lasht(s)+0.009)', ridge, s, w, '#2e1c18', mirror)
-    # a short hook down into the inner corner
+    # upper lash line: a fine raised line along the upper lid
+    ov = num(LASH_OVER)
+    ridge = f'{lv(10)}+0.005*sin(pi*w)'
+    decal(U, f'{top}-{ov}+w*(lasht(s)+{ov})', ridge, s, w, '#2e1c18', mirror)
+    # a slim tail down into the inner corner
     corner = lid_point(0.0)[1]
-    quad_patch(lid_point(0.0, 0.012), lid_point(0.07, -0.009), (EYE_U0 - 0.006, corner - 0.03),
-               (EYE_U0 - 0.006, corner - 0.03), lv(10), '#2e1c18', mirror)
-    # its wing past the outer corner, pointing out and a little down
+    quad_patch(lid_point(0.0, 0.004), lid_point(0.035, -LASH_OVER),
+               (EYE_U0 - 0.004, corner - 0.02), (EYE_U0 - 0.004, corner - 0.02), lv(10),
+               '#2e1c18', mirror)
+    # its flick past the outer corner: out and a little down, tapering to a point
     v1 = lid_point(1.0)[1]
-    lo0, hi0, tip, ln = v1 - 0.009, v1 + LASH_TH.c @ np.ones(len(LASH_TH.c)), v1 - 0.004, 0.14
+    lo0, hi0 = v1 - LASH_OVER, v1 + LASH_TH.c @ np.ones(len(LASH_TH.c))
+    tip, ln = v1 - 0.006, LASH_WING
     f = f'(s-1)*{num(1 / ln)}'
     lo = f'{num(lo0)}+{f}*{num(tip - lo0)}'
-    hi = f'{num(hi0)}+{f}^0.75*{num(tip - hi0)}'
+    hi = f'{num(tip)}+(1-{f})^1.25*{num(hi0 - tip)}'
     decal(U, f'{lo}+w*({hi}-({lo}))', ridge, ('s', 1, 1 + ln), w, '#2e1c18', mirror)
     # lower lash line on the outer half, thickening toward the outer corner where it meets the
     # wing; and the crease of the upper lid
@@ -695,7 +704,7 @@ def eye(mirror):
     decal(U, f'{bot}+0.004-w*0.03*{f}^1.5*(1-{f})^0.3', lv(10), ('s', 0.4, 1), w, '#6e3a2a',
           mirror)
     f = '(s-0.22)*1.3699'
-    decal(U, f'{top}+lasht(s)+0.026+w*0.008*4*{f}*(1-{f})', lv(2), ('s', 0.22, 0.95), w,
+    decal(U, f'{top}+lasht(s)+0.05+w*0.008*4*{f}*(1-{f})', lv(2), ('s', 0.22, 0.95), w,
           '#d9a896', mirror)
     if X['under_eye']:
         # the soft fold under the lower lid that a smile pushes up
