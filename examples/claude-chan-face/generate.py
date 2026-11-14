@@ -474,7 +474,15 @@ LID_UP_PTS = [(0, 0.06), (0.15, 0.077), (0.3, 0.082), (0.5, 0.085), (0.7, 0.083)
               (1.0, 0.065)]
 LID_LO_PTS = [(0, 0.06), (0.1, 0.011), (0.25, -0.044), (0.4, -0.072), (0.55, -0.072),
               (0.7, -0.049), (0.85, -0.016), (0.95, 0.03), (1.0, 0.065)]
-BROW_PTS = [(-0.05, 0.255), (0.25, 0.275), (0.55, 0.283), (0.85, 0.275), (1.05, 0.262)]
+# The brow, measured on the sheet: a thin line about 0.63 eye widths above the eye corners,
+# nearly level over the inner half of the eye (the hair hides the rest).  The points are
+# solved so that, seen from the front, it is a parabolic arch: highest a third of the way
+# out, 0.03 eye widths lower at the inner end and 0.12 lower at the outer end.  They rise
+# outward because the forehead curves back there, which pulls the line down on screen.
+BROW_PTS = [(-0.08, 0.2841), (0.1, 0.2953), (0.3, 0.3046), (0.45, 0.3093), (0.65, 0.3117),
+            (0.85, 0.309), (1.06, 0.299)]
+BROW_T = (-0.08, 1.06)   # where it starts and ends, in eye widths from the inner corner
+BROW_TH = 0.011          # its thickest point, a third of the way out
 # the lash band is thickest over the middle and outer third, so its top edge arches too
 LASH_TH = Curve([(0, 0.027), (0.12, 0.038), (0.3, 0.044), (0.48, 0.05), (0.65, 0.057),
                  (0.77, 0.057), (0.89, 0.05), (1.0, 0.042)], deg=6, name='lasht')
@@ -694,10 +702,12 @@ def eye(mirror):
         f = '(s-0.35)*1.8182'
         decal(U, f'{bot}-0.032+w*0.006*4*{f}*(1-{f})', lv(2), ('s', 0.35, 0.9), w, '#ebc2b4',
               mirror)
-    # eyebrow: thick at the inner end, tapering outward
-    th = '(0.018-0.012*(s+0.05)*0.9091)'
-    decal(U, f'{num(EYE_V)}+brow(s)-{th}/2+w*{th}', lv(2), ('s', -0.05, 1.05), w, '#c4642e',
-          mirror)
+    # eyebrow: a thin brown line along the brow curve, rounded at the inner end and tapering to
+    # a point at the outer end; s runs 0..1 along it, thickest at s = 0.4
+    t0, t1 = BROW_T
+    bt = f'({num(t0)}+{num(t1 - t0)}*s)'
+    th = f'{num(BROW_TH)}*(2.5*s)^0.5*(1.6667*(1-s))^0.75'
+    decal(eye_u(bt), f'{num(EYE_V)}+brow{bt}-{th}/2+w*{th}', lv(2), s, w, '#9b5843', mirror)
     # blush on the cheek, in three soft steps
     steps = ((1.0, '#fadcd2'), (0.7, '#f7cbc0'), (0.42, '#f3b9ad'))[:X['blush']]
     for k, (sc, col) in enumerate(steps):
