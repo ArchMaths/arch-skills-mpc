@@ -5,7 +5,10 @@ The SVG is Natural Earth 110m Admin-0 countries projected as x = (lon+180)*2, y 
 one <path> per polygon, with no names or colours. Each path is matched to the Natural Earth
 feature whose vertices contain all of its vertices, then filled by continent or by MAPCOLOR7.
 
-usage: colorize.py map.svg countries.geojson out.svg [--mode political|continent]
+usage: colorize.py map.svg countries.geojson out.svg [--mode political|continent] [--same-as A=B ...]
+
+--same-as A=B colours country A like country B (repeatable). Countries are named by ISO_A2_EH,
+ADM0_A3 or NAME, e.g. --same-as TW=CN to colour Taiwan like mainland China.
 
 Inputs (see README.md):
   map.svg            https://raw.githubusercontent.com/PrinsFrank/php-geo-svg/main/docs/images/world-equirectangular.svg
@@ -19,6 +22,7 @@ from xml.sax.saxutils import escape
 
 svg_path, geo_path, out_path = sys.argv[1:4]
 mode = sys.argv[sys.argv.index('--mode') + 1] if '--mode' in sys.argv else 'political'
+same_as = dict(sys.argv[i + 1].split('=', 1) for i, a in enumerate(sys.argv) if a == '--same-as')
 
 OCEAN = '#2f6fae'
 ANTARCTICA = '#b9cfdf'
@@ -31,6 +35,11 @@ POLITICAL = {1: '#e8a94a', 2: '#7fb069', 3: '#e07a5f', 4: '#a98bd6', 5: '#ecd060
 
 key = lambda x, y: (round(x, 3), round(y, 3))
 features = json.load(open(geo_path))['features']
+ids = lambda p: {p['ISO_A2_EH'], p['ADM0_A3'], p['NAME']}
+by_id = {k: f['properties'] for f in features for k in ids(f['properties'])}
+for a, b in same_as.items():
+    if a not in by_id or b not in by_id:
+        sys.exit(f'--same-as {a}={b}: unknown country {a if a not in by_id else b}')
 owner = {}   # vertex -> set of feature indices
 for i, f in enumerate(features):
     g = f['geometry']
@@ -54,12 +63,14 @@ for d in paths:
         continue
     i, n = votes.most_common(1)[0]
     p = features[i]['properties']
-    if p['CONTINENT'] == 'Antarctica':
+    # Colour taken from another country (--same-as); the path keeps its own name.
+    q = next((by_id[b] for a, b in same_as.items() if a in ids(p)), p)
+    if q['CONTINENT'] == 'Antarctica':
         fill = ANTARCTICA
     elif mode == 'continent':
-        fill = CONTINENT[p['CONTINENT']]
+        fill = CONTINENT[q['CONTINENT']]
     else:
-        fill = POLITICAL[p['MAPCOLOR7']]
+        fill = POLITICAL[q['MAPCOLOR7']]
     counts[fill] += 1
     # Short path data: 3 decimals is 0.0015 degrees, far below Arch's mesh.
     dd = re.sub(r'(\d+\.\d{3})\d+', r'\1', d)
@@ -69,7 +80,8 @@ with open(out_path, 'w') as fh:
     fh.write('<?xml version="1.0" encoding="UTF-8"?>\n')
     fh.write('<!-- World map, equirectangular (x = (lon+180)*2, y = (90-lat)*2). Shapes: php-geo-svg docs/images/'
              'world-equirectangular.svg (MIT, (c) 2021 PrinsFrank), from Natural Earth 110m countries (public domain). '
-             f'Coloured by {"continent" if mode == "continent" else "Natural Earth MAPCOLOR7"}; the ocean is the background. -->\n')
+             f'Coloured by {"continent" if mode == "continent" else "Natural Earth MAPCOLOR7"}'
+             + ''.join(f', {a} coloured like {b}' for a, b in same_as.items()) + '; the ocean is the background. -->\n')
     fh.write(f'<svg xmlns="http://www.w3.org/2000/svg" width="720" height="360" viewBox="0 0 720 360" style="background:{OCEAN}">\n')
     fh.write('\n'.join(out) + '\n</svg>\n')
 print(f'{len(out)} paths coloured, {unmatched} unmatched; colours: {dict(counts)} -> {out_path}')
