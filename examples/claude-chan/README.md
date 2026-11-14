@@ -38,10 +38,13 @@ surface precision* slider in Arch's settings for faster redraws while rotating.
   hair and the long hair are the same surfaces. Down the back the locks fall straight in three layers;
   at the sides they fan out over the shoulders and arms; in front of the ears thinner locks fall over
   the chest. Locks wave more toward their ends and finish in a curled tip. The bangs follow the
-  portrait: one wide lock sweeps from her upper right down to a point at the bridge of the nose, the
-  forehead shows in a tall triangle above her left eye, a lock sweeps over her left temple, and a smaller
-  gap above her right eye is framed by the locks at the side. Locks fall from the temples to below the
-  jaw: beside the face on her right, so the whole jaw line shows, and over the outer cheek on her left.
+  portrait: one wide lock sweeps down to the bridge of the nose, the forehead shows in a tall triangle
+  above her left eye, a lock sweeps over her left temple, and a smaller gap above her right eye is
+  framed by the locks at the side. The wide lock and the temple lock are made of narrow, rounded strands
+  laid along the strand lines drawn on the sheet, stacked on each other, with staggered pointed tips and
+  a lighter streak down the main ones. Locks fall from the temples to below the jaw: beside the face on
+  her right, so the whole jaw line shows, and over the outer cheek on her left, where thin strands
+  flick inward.
   A three-strand braid crown around the back of the head.
 - **Accessories**: a chrysanthemum on a black bow with cream ribbons and a gold tassel above her left
   ear; gold tassel earrings.
@@ -85,6 +88,12 @@ node src/cli.js examples/claude-chan/claude-chan-3d.arch -o examples/claude-chan
   points measured that way (`EYES` in `face.py`): its upper lid, the top of its lash line and its lower
   lid, relative to its own iris, written for Arch as one short polynomial each. The bangs were placed the
   same way, against the portrait's border between hair and skin.
+- **Bangs as strands.** A strand is a blade from the crown over the dome to the hairline, then through a
+  middle point to a pointed tip just in front of the face; its section is narrow and round, so the light
+  falls off across it like hair. Strands that overlap are lifted off the dome by different amounts so they
+  lie on each other instead of cutting through, and a thin dark layer under the wide lock shows between
+  its strands like the drawing's strand lines. The lighter streak is a thin ribbon on the front of a strand
+  that tapers away at both ends.
 - **Brows over the hair.** Each brow is a decal on the skin; where a lock of the bangs crosses it, the
   generator samples the front of that lock along the brow and adds a short strip just in front of it,
   so the brow shows over the hair from the front and three-quarter views.
