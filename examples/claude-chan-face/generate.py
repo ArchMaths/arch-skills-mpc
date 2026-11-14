@@ -269,27 +269,39 @@ def rot_y(deg):
     return np.array([[c, 0, s], [0, 1, 0], [-s, 0, c]])
 
 
-# The skull: a superquadric, squarish from above so the face is broad and flat.
-cranium = Superquadric(xf=0.92, xb=0.9, y=0.83, zt=0.92, zb=0.66, n=2.15, m=2.0)
+# The skull: a superquadric, squarish from above so the face is broad and flat.  Measured on
+# the sheet (in eye-to-chin lengths, seen from the front), its top is about 1.3 above the eyes,
+# under the hair, so the head is 0.8 as wide as it is tall; its underside is shallow (zb), so
+# below the ears the face narrows instead of keeping the skull's width.
+cranium = Superquadric(xf=0.92, xb=0.9, y=0.83, zt=1.3, zb=0.42, n=2.15, m=2.5)
 # The lower face: a superquadric that is deep in front and long below (cheeks, mouth, chin),
-# trimmed by the two sides of the jaw and the plane under the jaw.
-lowerface = Inter([Superquadric(xf=0.90, xb=0.25, y=0.74, zt=0.30, zb=0.91, n=2.3, m=3.2),
-                   HalfSpace([0, 0.595, -0.804], through=[0.3, 0.6, -0.5]),
-                   HalfSpace([0, -0.595, -0.804], through=[0.3, -0.6, -0.5]),
-                   HalfSpace([-0.488, 0, -0.873], through=[0.56, 0, -0.875])], 12)
+# trimmed by the two sides of the jaw and the plane under the jaw.  The jaw is a narrow V, as
+# on the sheet: half as wide as the eyes are apart at 0.7 of the way down to the chin.
+lowerface = Inter([Superquadric(xf=0.90, xb=0.25, y=0.62, zt=0.30, zb=0.91, n=2.3, m=3.2),
+                   HalfSpace([0, 0.7, -0.714], through=[0.3, 0.43, -0.5]),
+                   HalfSpace([0, -0.7, -0.714], through=[0.3, -0.43, -0.5]),
+                   HalfSpace([-0.488, 0, -0.873], through=[0.56, 0, -0.875])], 16)
 # The neck: a slanted cylinder between two planes (its top is buried in the skull).
 neck = Inter([Ellipsoid([-0.25, 0, -0.8], [0.30, 0.30, np.inf], rot_y(7)),
               HalfSpace([0, 0, -1], h=1.55), HalfSpace([0, 0, 1], h=0.2)], 40)
-HEAD = Union([Union([cranium, lowerface], 24), neck], 14)
+HEAD = Union([Union([cranium, lowerface], 14), neck], 14)
+
+# Where the features sit on the front face (u across, v up; see the decals below): the inner
+# corner, width and height of her left eye, and the heights of the nose and the mouth.
+# Measured on the sheet's front portraits, from the eye corners: the inner corners are 1.16-1.32
+# eye widths apart, the nose is 0.34-0.39 of the way down to the chin and the mouth 0.59-0.63.
+# Seen from the front the model gives 1.3, 0.35 and 0.60.
+EYE_U0, EYE_UW, EYE_V = 0.2, 0.46, -0.16
+NOSE_V, MOUTH_V = -0.38, -0.65
 
 CHEEKS = Bump(0.50, -0.40, 0.23, 0.18, 0.02, sym=True)   # set by the expression
 BUMPS = [
-    Bump(0.39, -0.16, 0.14, 0.10, -0.025, sym=True),             # eye sockets
-    Bump(0.0, -0.42, 0.04, 0.09, 0.05, svb=0.035, g=0.8),        # nose
+    Bump(EYE_U0 + EYE_UW / 2 + 0.005, -0.16, 0.14, 0.10, -0.025, sym=True),   # eye sockets
+    Bump(0.0, NOSE_V, 0.04, 0.09, 0.05, svb=0.035, g=0.8),       # nose
     CHEEKS,                                                      # cheeks
-    Bump(0.0, -0.68, 0.17, 0.10, 0.015),                         # lips
+    Bump(0.0, MOUTH_V, 0.17, 0.10, 0.015),                       # lips
     Bump(0.0, -1.45, 0.22, 0.32, 0.05),                          # chin
-    Bump(0.0, -0.80, 0.105, 0.05, -0.01),                        # below the lower lip
+    Bump(0.0, MOUTH_V - 0.12, 0.105, 0.05, -0.01),               # below the lower lip
 ]
 
 
@@ -464,23 +476,26 @@ def clamp(v, lo, hi):
     return f'min(max({v},{lo}),{hi})'
 
 
-# The left eye, in front-face coordinates.  t = 0 at the inner corner, 1 at the outer corner;
-# the lid curves give v relative to EYE_V.
-EYE_U0, EYE_UW, EYE_V = 0.155, 0.46, -0.16
+# The left eye, in front-face coordinates.  t = 0 at the inner corner EYE_U0, 1 at the outer
+# corner; the lid curves give v relative to EYE_V.
 # Measured on the sheet (her left eye in the calm portrait, in eye widths, times the eye width
 # 0.46): the upper lid arches gently, about 0.025 above the corners; the lower lid is deepest
 # near the middle (0.29 eye widths) and rises in a round curve to the outer corner.
 LID_UP_PTS = [(0, 0.06), (0.15, 0.077), (0.3, 0.082), (0.5, 0.085), (0.7, 0.083), (0.85, 0.078),
               (1.0, 0.065)]
-LID_LO_PTS = [(0, 0.06), (0.1, 0.011), (0.25, -0.044), (0.4, -0.072), (0.55, -0.072),
-              (0.7, -0.049), (0.85, -0.016), (0.95, 0.03), (1.0, 0.065)]
+# Under the iris the lower lid is flat, as on the sheet (0.3 eye widths below the corners from
+# a fifth of the way out to past the middle); it rises steeply in the pale inner corner, so it
+# does not cut across the iris, and in a round curve to the outer corner.
+LID_LO_PTS = [(0, 0.06), (0.05, 0.022), (0.1, -0.022), (0.15, -0.054), (0.2, -0.069),
+              (0.3, -0.076), (0.45, -0.077), (0.55, -0.073), (0.7, -0.049), (0.85, -0.016),
+              (0.95, 0.03), (1.0, 0.065)]
 # The brow, measured on the sheet: a thin line about 0.63 eye widths above the eye corners,
 # nearly level over the inner half of the eye (the hair hides the rest).  The points are
 # solved so that, seen from the front, it is a parabolic arch: highest a third of the way
 # out, 0.03 eye widths lower at the inner end and 0.12 lower at the outer end.  They rise
 # outward because the forehead curves back there, which pulls the line down on screen.
-BROW_PTS = [(-0.08, 0.2841), (0.1, 0.2953), (0.3, 0.3046), (0.45, 0.3093), (0.65, 0.3117),
-            (0.85, 0.309), (1.06, 0.299)]
+BROW_PTS = [(-0.08, 0.2692), (0.1, 0.2805), (0.3, 0.2906), (0.45, 0.296), (0.65, 0.2996),
+            (0.85, 0.298), (1.06, 0.2893)]
 BROW_T = (-0.08, 1.06)   # where it starts and ends, in eye widths from the inner corner
 BROW_TH = 0.011          # its thickest point, a third of the way out
 # The upper lash line is a fine line along the lid: a hairline at the inner corner, growing
@@ -494,7 +509,6 @@ LASH_OVER = 0.004
 LASH_WING = 0.18         # how far its flick reaches past the outer corner, in eye widths
 # the iris is 0.57 eye widths across, a little toward the nose, its centre just under the lid
 IRIS = dict(t=0.44, dv=0.058, a=0.131, b=0.135)
-MOUTH_V = -0.68
 
 # ---------------------------------------------------------------- pose
 # The head turns rigidly about a point at the top of the neck, P -> t + R P, which for the skin
@@ -720,7 +734,7 @@ def eye(mirror):
     # blush on the cheek, in three soft steps
     steps = ((1.0, '#fadcd2'), (0.7, '#f7cbc0'), (0.42, '#f3b9ad'))[:X['blush']]
     for k, (sc, col) in enumerate(steps):
-        ellipse(0.47, X['blush_v'], 0.13 * sc, 0.055 * sc, lv(k + 1), col, mirror, fn='dc')
+        ellipse(EYE_U0 + 0.315, X['blush_v'], 0.13 * sc, 0.055 * sc, lv(k + 1), col, mirror, fn='dc')
 
 
 def mouth():
@@ -771,9 +785,10 @@ def features():
     emit('# The face is drawn on the skin of the front face, D = (1,a,b).  Each region gets its')
     emit('# own copy of hr without the parts that are negligible there (he: eyes and brows,')
     emit('# hc: cheeks, hm: mouth), and de, dc, dm lift it by the fraction c.')
-    for name, D in (('e', front_region(0.1, 0.75, -0.32, 0.24)),
-                    ('c', front_region(0.33, 0.61, -0.48, -0.36)),
-                    ('m', front_region(-0.15, 0.15, -0.75, -0.6, sym=False))):
+    for name, D in (('e', front_region(EYE_U0 - 0.055, EYE_U0 + 0.6, -0.32, 0.24)),
+                    ('c', front_region(EYE_U0 + 0.175, EYE_U0 + 0.5, -0.48, -0.36)),
+                    ('m', front_region(-0.15, 0.15, MOUTH_V - 0.07, MOUTH_V + 0.08,
+                                       sym=False))):
         node, bumps, err = region_hr(D)
         assert err < 2e-5, (name, err)
         emit(f'h{name}(a,b)={hr_expr(FRONT, node, bumps)}')
@@ -838,8 +853,8 @@ def main():
     ap.add_argument('--prec', type=float, default=20)
     ap.add_argument('--azimuth', type=float, help="default: the expression's view")
     ap.add_argument('--elevation', type=float)
-    ap.add_argument('--unit', type=float, default=210)
-    ap.add_argument('--center', default='0,0,-0.3')
+    ap.add_argument('--unit', type=float, default=185)
+    ap.add_argument('--center', default='0,0,-0.1')
     ap.add_argument('--tiles', type=int, default=4, help='tiles per cube face side')
     ap.add_argument('--stage', choices=('final', 'tiles', 'primitives'), default='final',
                     help='tiles: the bare head with its tiles in two colours; primitives: the '

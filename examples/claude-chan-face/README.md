@@ -47,14 +47,14 @@ The superquadrics are what make the head read as anime rather than as a ball. Th
 Arch expands user functions as text macros. A smooth-min written the usual way, `min(a,b) − h(a,b)`, repeats its arguments, so nesting a few of them multiplies the formula size exponentially. A first test with three nested ones did not finish meshing 24 tiles within 30 seconds. Here every blend is instead a p-norm, in which each part appears once:
 
 ```
-soft intersection   1/s^k = Σ 1/s_i^k        (k = 12: jaw;  k = 40: neck)
-soft union            s^k = Σ s_i^k          (k = 24: skull + lower face;  k = 14: + neck)
+soft intersection   1/s^k = Σ 1/s_i^k        (k = 16: jaw;  k = 40: neck)
+soft union            s^k = Σ s_i^k          (k = 14: skull + lower face;  k = 14: + neck)
 ```
 
 Both stay homogeneous, so a blend is a fixed fraction of the head's size. A smaller `k` gives a wider, softer blend. The whole head is:
 
 ```
-head = union₁₄( union₂₄( skull, inter₁₂(lower face, jaw left, jaw right, under the jaw) ),
+head = union₁₄( union₁₄( skull, inter₁₆(lower face, jaw left, jaw right, under the jaw) ),
                 inter₄₀(neck cylinder, below z = 0.2, above z = −1.55) )
 ```
 
@@ -92,7 +92,7 @@ The ears are separate shells. Each is a pear-shaped outline in its own frame on 
 
 - Amber eyes, measured on the sheet (her left eye in the calm portrait, in eye widths):
   - The upper lid arches gently, about 0.055 above the corners.
-  - The lower lid is deepest just past the middle (0.29) and rises in a round curve to the outer corner: 0.24 deep at t = 0.7, 0.17 at 0.85, 0.08 at 0.95.
+  - The lower lid is flat under the iris, 0.3 below the corners from t = 0.2 to past the middle, so it does not cut across the iris. It drops steeply from the inner corner, and rises in a round curve to the outer corner: 0.24 deep at t = 0.7, 0.17 at 0.85, 0.08 at 0.95.
   - The iris is 0.57 across and sits a little toward the nose (t = 0.44), its centre just under the lid, so its top is hidden. It has a dark brown rim, an amber-brown body, a dark top and lighter bands near the lower lid.
   - The pupil is large, 0.58 of the iris across, just under the lid, with a highlight on its left and a smaller one on its right.
 - A fine, dark upper lash line that follows the lid in one smooth arc.
@@ -102,8 +102,20 @@ The ears are separate shells. Each is a pear-shaped outline in its own frame on 
   - The lower lash line thickens toward the outer corner, where it meets the flick. A soft lid crease runs above the lash line.
 - Thin brown eyebrows, measured on the sheet. Each is a fine line about 0.63 eye widths above the eye corners, nearly level over the inner half of the eye, where the sheet shows it between the strands of hair. It is rounded at the inner end, thickest a third of the way out (0.011, about a fortieth of the eye width) and tapers to a point at the outer end. Its control points are solved so that from the front it is a smooth parabolic arch. They rise toward the outer end, because there the forehead curves back and would otherwise pull the line down on screen.
 - Soft three-step blush on the cheeks, a small pointed nose made by shape alone, and a small closed smile.
-- A V-shaped jaw with a rounded chin, ears, and a slender neck.
+- A tall, domed skull, a narrow V-shaped jaw with a rounded chin, ears, and a slender neck.
 - She looks up by 10°, measured from the sheet. In its portraits the nose sits 0.31 of the way from the eye line to the chin, and the mouth 0.59–0.63. With the head level, the model measured 0.40 and 0.64, which reads as looking down. Looking up 10° and a slightly higher nose give 0.335 and 0.60. The saved views are near eye level (2°).
+- The proportions are measured on the sheet's two front portraits (calm and smiling), from the eye corners along the face's own up direction, in units of the distance from the eye corners to the chin. The model is measured the same way in its front view.
+
+  | Measure | Sheet | Model |
+  |---|---|---|
+  | Gap between the inner eye corners, in eye widths | 1.16–1.32 | 1.3 (was 0.96) |
+  | Nose, as a fraction of the way from the corners to the chin | 0.34–0.39 | 0.35 |
+  | Mouth, as a fraction of the way from the corners to the chin | 0.59–0.63 | 0.60 |
+  | Top of the skull above the corners | about 1.3 (under the hair) | 1.34 (was 0.90) |
+  | Head width / height | about 0.8 | 0.79 (was 0.99) |
+  | Half-width of the face at 0.5 / 0.69 / 0.75 / 0.82 / 0.89 of the way down | ≈0.65 / 0.46 / 0.39 / 0.29 / 0.19 | 0.66 / 0.44 / 0.37 / 0.29 / 0.20 |
+
+  The head had been about as wide as it was tall, with the eyes above its middle; on the sheet they sit well below it, and the face narrows from the ears to a pointed chin. So the skull is taller (`zt`) with a rounder dome (`m` = 2.5), its underside is shallow (`zb`), so that below the ears the face narrows instead of keeping the skull's width, and the jaw is a steeper V. The width at the ears is unchanged; it matched the sheet. With the eyes closer together the nose had looked too far below them, at 0.95 of the inner-corner gap; it is now 0.69. The eye sockets, brows and blush move with the eyes; the lip bumps move with the mouth.
 
 ## Expressions
 
