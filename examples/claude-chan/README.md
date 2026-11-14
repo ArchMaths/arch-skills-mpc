@@ -16,8 +16,13 @@ surface precision* slider in Arch's settings for faster redraws while rotating.
 
 ## What is modelled
 
-- **Head**: sculpted from parts, tilted 13.5 degrees toward her right shoulder and turned a little to her
-  right, as in the sheet's natural-smile (自然微笑) portrait, which gives her a lively pose. The face is a
+- **Proportions**: measured on the sheet's full-body front view (正面). Her head, crown to chin, is 1/7.9
+  of her height; the elbows are at the waist, the cuffs at the hips and the fingertips at mid-thigh, with
+  the arms held a little away from the skirt. The skirt flares from the corset in a straight A-line, as
+  wide as the sheet's at every height, and ends high enough to show the lace-up boots.
+- **Head**: sculpted from parts, tilted toward her right shoulder and turned a little to her right, which
+  gives her a lively pose. The tilt is 7 degrees at the eyes, between the sheet's calm portraits (7 to 9
+  degrees) and its full-body front view (about 3). The face is a
   stack of horizontal arcs whose width, depth and roundness change with height, so it has a real profile:
   forehead, the dip between the eyes, a small pointed nose, lips, a receding chin, and a jawline that
   runs up to the ear. Seen from the front the jaw runs nearly straight from the cheekbones to a blunt,
@@ -53,8 +58,9 @@ surface precision* slider in Arch's settings for faster redraws while rotating.
   corset with gold buttons, piping, chain, ring and tassel, a pleated cream skirt with orange
   embroidery, a frilled petticoat, a black overskirt lined in orange with gold-trimmed lapels, hip bows
   with chrysanthemums, chains and tassels, an orange back panel with a black bow, cream lace-up boots.
-- **Hands**: palm, two-jointed fingers and thumb, about half as wide as the cuffs they come out of,
-  as on the sheet.
+- **Hands**: palm, two-jointed fingers and thumb, half as long as her head and about as wide as the
+  cuffs they come out of, as on the sheet. Her right hand hangs relaxed and turned out; her left holds the
+  book at her side.
 - **Props**: a leather book with gold corners, a chrysanthemum emblem and a ribbon bookmark; a display base.
 
 ## Rebuilding
@@ -106,8 +112,12 @@ node src/cli.js examples/claude-chan/claude-chan-3d.arch -o examples/claude-chan
 - **Head turn.** The generator draws the head's parts inside a turned block: each coordinate is
   replaced by a fixed combination of all three (a rotation about the top of the neck). The long locks
   use the same rotation with an angle that eases from the head's to zero down the lock, hb(t), so they
-  turn with the head where they lie on it and hang straight below. Earrings and tassels hang straight
-  from their turned attachment points.
+  turn with the head where they lie on it and hang straight below. The head is modelled large for its
+  detail and scaled down (0.82) about the same point, by the same block; the long locks ease from that
+  scale to none as they leave the head. Earrings and tassels hang straight from their turned attachment
+  points and are scaled with the head.
+- **Skirt.** The skirt is drawn from z 8.4 to 1.35 and raised as a whole (a raised block adds to every
+  z), so its many parts keep their own measurements.
 - **Braid.** Three strands follow an oval ring on the dome and weave as `sin(tau)` across the ring and
   `sin(2 tau)` in height, a third of a turn apart.
 - Arch lights a surface at half strength where its normal faces away from the camera, so the generator

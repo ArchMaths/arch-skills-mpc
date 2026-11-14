@@ -87,13 +87,16 @@ def ellipsoid(C, R, color, ref, fr=None, orient='closed', urange=(0, 'pi'), opac
 # =====================================================================
 # Her head is tilted toward her right shoulder and turned a little to her right, as on the sheet. The
 # head, bangs, braid and ornament turn rigidly about the top of the neck; long locks turn with the head
-# where they lie on it and hang straight below (see hair.py).
+# where they lie on it and hang straight below (see hair.py). The head is modelled large for its detail
+# and scaled down about the same point to the sheet's proportions.
 _ry = lambda a: [[math.cos(a), 0, math.sin(a)], [0, 1, 0], [-math.sin(a), 0, math.cos(a)]]
 _rz = lambda a: [[math.cos(a), -math.sin(a), 0], [math.sin(a), math.cos(a), 0], [0, 0, 1]]
-HEAD_YAW, HEAD_ROLL = -4, -13.5     # degrees: turned a little to her right, tilted toward her right shoulder as on the sheet
+HEAD_YAW, HEAD_ROLL = -4, -7       # degrees: turned a little to her right, tilted toward her right shoulder; the eye
+                                    # line slopes 7 degrees, between the sheet's calm portraits (7-9) and its front view (3)
+HEAD_SCALE = 0.82                   # on the sheet's front view the head (crown to chin) is 1/7.9 of her height
 _R = [[sum(_rz(math.radians(HEAD_YAW))[i][m] * _ry(math.radians(HEAD_ROLL))[m][j] for m in range(3)) for j in range(3)] for i in range(3)]
 _ax, _ang = axis_angle(_R)
-HEAD_TURN = dict(pivot=(0, 0.12, 11.3), axis=_ax, angle=_ang)
+HEAD_TURN = dict(pivot=(0, 0.12, 11.3), axis=_ax, angle=_ang, scale=HEAD_SCALE)
 if want('head') or want('hair') or want('ornament') or want('earrings'):
     with sc.turned(**HEAD_TURN):
         run('face.py')        # the hair and accessories are placed on the head, so they need it too
@@ -198,11 +201,12 @@ if want('earrings'):
     sc.blank()
     sc.note('Gold tassel earrings')
     for side, tag in ((1, 'L'), (-1, 'R')):
-        lobe = sc.turn_point(EAR_LOBES[tag], (HEAD_TURN['pivot'], HEAD_TURN['axis'], HEAD_TURN['angle'], None))
-        top = (lobe[0] + 0.01 * side, lobe[1], lobe[2] - 0.04)
-        torus(add(top, (0, 0, -0.03)), ((0, 1, 0), (0, 0, 1), (1, 0, 0)), 0.03, 0.007, GOLD, f'earHoop{tag}')
-        ellipsoid((top[0], top[1], top[2] - 0.1), (0.045, 0.045, 0.045), GOLD, f'earBead{tag}')
-        tassel((top[0], top[1], top[2] - 0.15), 0.4, GOLD, f'earTassel{tag}', r=0.035)
+        lobe = sc.turn_point(EAR_LOBES[tag], (HEAD_TURN['pivot'], HEAD_TURN['axis'], HEAD_TURN['angle'], None, HEAD_SCALE))
+        k = HEAD_SCALE
+        top = (lobe[0] + 0.01 * side * k, lobe[1], lobe[2] - 0.04 * k)
+        torus(add(top, (0, 0, -0.03 * k)), ((0, 1, 0), (0, 0, 1), (1, 0, 0)), 0.03 * k, 0.007 * k, GOLD, f'earHoop{tag}')
+        ellipsoid((top[0], top[1], top[2] - 0.1 * k), (0.045 * k,) * 3, GOLD, f'earBead{tag}')
+        tassel((top[0], top[1], top[2] - 0.15 * k), 0.4 * k, GOLD, f'earTassel{tag}', r=0.035 * k)
 
 if want('hair') or want('ornament'):
     run('hair.py')
@@ -227,7 +231,7 @@ if want('ornament'):
         ribbon([add(base, (0.02, 0.08, 0)), add(base, (0.13, 0.1, -0.38)), add(base, (0.15, 0.15, -0.76))], 0.068, BLACK, 'hairRibbon2', face, rim=GOLD)
         flower(C, nrm, 0.29, 'hairFlower')
         tassel_top = sc.turn_point(add(C, (0.05, -0.07, -0.19)))
-    tassel(tassel_top, 0.64, GOLD, 'hairTassel', r=0.043)     # the tassel hangs straight down
+    tassel(tassel_top, 0.64 * HEAD_SCALE, GOLD, 'hairTassel', r=0.043 * HEAD_SCALE)     # the tassel hangs straight down
 
 # =====================================================================
 #  VIEW

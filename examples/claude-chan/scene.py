@@ -119,7 +119,8 @@ class Scene:
         self.flipped = []
         self.report = []
         self.names = set()
-        self.turn = None          # (pivot, axis, angle, blend) while drawing inside a turned() block
+        self.turn = None          # (pivot, axis, angle, blend, scale) while drawing inside a turned() block
+        self.lift = 0.0           # added to z while drawing inside a raised() block
 
     # Arch '^' -> Python; '^' binds tighter than unary minus in both.
     def py(self, expr):
@@ -163,11 +164,12 @@ class Scene:
 
     # ---------- turning a group of parts (her head) ----------
     @contextmanager
-    def turned(self, pivot, axis, angle, blend=None):
-        """Surfaces and curves drawn inside are turned by angle about axis through pivot. blend=None turns
-        them rigidly; blend=(S, C) gives Arch expressions in the surface parameters for sin and 1-cos of
-        a varying angle, so a part can turn with the head at one end and not at all at the other."""
-        prev, self.turn = self.turn, (pivot, axis, angle, blend)
+    def turned(self, pivot, axis, angle, blend=None, scale=1.0):
+        """Surfaces and curves drawn inside are turned by angle about axis through pivot and scaled about it.
+        blend=None turns them rigidly; blend=(S, C) gives Arch expressions in the surface parameters for sin
+        and 1-cos of a varying angle, so a part can turn with the head at one end and not at all at the
+        other; a third expression in blend is the varying scale."""
+        prev, self.turn = self.turn, (pivot, axis, angle, blend, scale)
         try:
             yield
         finally:
@@ -181,31 +183,41 @@ class Scene:
         finally:
             self.turn = prev
 
+    @contextmanager
+    def raised(self, dz):
+        """Surfaces and curves drawn inside are moved up by dz."""
+        prev, self.lift = self.lift, self.lift + dz
+        try:
+            yield
+        finally:
+            self.lift = prev
+
     def turn_point(self, P, turn=None):
-        """Where a point of a turned group ends up (rigid turn)."""
+        """Where a point of a turned group ends up (rigid turn and scale)."""
         turn = turn or self.turn
         if turn is None:
             return P
-        p, axis, ang, _ = turn
+        p, axis, ang = turn[:3]
+        k = turn[4] if len(turn) > 4 else 1.0
         K, K2 = rot_parts(axis)
         s, c = math.sin(ang), 1 - math.cos(ang)
         d = sub(P, p)
-        return tuple(p[i] + d[i] + sum((s * K[i][j] + c * K2[i][j]) * d[j] for j in range(3)) for i in range(3))
+        return tuple(p[i] + k * (d[i] + sum((s * K[i][j] + c * K2[i][j]) * d[j] for j in range(3))) for i in range(3))
 
     def _turn(self, XYZ):
-        p, axis, ang, blend = self.turn
+        p, axis, ang, blend, k = self.turn
         K, K2 = rot_parts(axis)
         V = XYZ
         out = []
         for i in range(3):
             if blend is None:
                 s, c = math.sin(ang), 1 - math.cos(ang)
-                M = [(1 if i == j else 0) + s * K[i][j] + c * K2[i][j] for j in range(3)]
+                M = [k * ((1 if i == j else 0) + s * K[i][j] + c * K2[i][j]) for j in range(3)]
                 const = p[i] - sum(M[j] * p[j] for j in range(3))
                 terms = [f"{fmt(M[j])}*({V[j]})" for j in range(3) if abs(M[j]) > 1e-9]
                 out.append('+'.join(terms) + f"+{fmt(const)}")
             else:
-                S, C = blend
+                S, C = blend[:2]
                 terms = []
                 for j in range(3):
                     parts = ['1'] if i == j else []
@@ -217,8 +229,14 @@ class Scene:
                         terms.append(f"({'+'.join(parts)})*({V[j]})")
                 a = sum(K[i][j] * p[j] for j in range(3))
                 b = sum(K2[i][j] * p[j] for j in range(3))
-                out.append('+'.join(terms) + f"-{fmt(a)}*{S}-{fmt(b)}*{C}")
+                e = '+'.join(terms) + f"-{fmt(a)}*{S}-{fmt(b)}*{C}"
+                if len(blend) > 2:          # scale about the pivot by the third expression
+                    e = f"{fmt(p[i])}+{blend[2]}*({e}-{fmt(p[i])})"
+                out.append(e)
         return tuple(out)
+
+    def _lift(self, XYZ):
+        return XYZ if not self.lift else (XYZ[0], XYZ[1], f"{XYZ[2]}+{fmt(self.lift)}")
 
     def surface(self, XYZ, U, V, color, ref=None, orient='closed', opacity=None, hidden=False):
         """XYZ: three Arch expressions; U, V: (name, lo, hi); orient: how to decide the outside.
@@ -226,7 +244,7 @@ class Scene:
         ('tube', 'u'|'v') away from the axis of rings at fixed u (or v), None = keep."""
         if self.turn:
             XYZ = self._turn(XYZ)
-        X, Y, Z = XYZ
+        X, Y, Z = self._lift(XYZ)
         u, u0, u1 = U
         v, v0, v1 = V
         lo_hi = [float(eval(self.py(fmt(t)), self.ns)) for t in (u0, u1, v0, v1)]
@@ -289,7 +307,7 @@ class Scene:
     def curve(self, XYZ, T, color, ref=None, thickness=2):
         if self.turn:
             XYZ = self._turn(XYZ)
-        X, Y, Z = XYZ
+        X, Y, Z = self._lift(XYZ)
         t, t0, t1 = T
         opts = [f"color={color}", f"thickness={thickness}"]
         if ref:

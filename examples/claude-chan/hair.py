@@ -10,6 +10,12 @@ T0 = 1 / (1 + (ZHC - ZBOT) / (HDZ * math.pi / 2))   # part of a lock's length th
 VF = HDZ * math.pi / 2 / T0              # how fast z falls with t below the dome
 
 _cape = [bezier_eval(CAPE, s) for s in np.linspace(0, 1, 200)]
+# how far out the arms reach (the sleeve, cuff and hand around the arm's line), by height
+ARM_ENV = [(9.1, 1.5), (8.42, 1.65), (7.6, 1.78), (7.12, 2.0), (6.6, 2.15), (6.1, 2.25), (5.75, 2.1)]
+_bk = BOOK[2]
+BOOK_Z = (min(P[2] for P in _bk) - 0.05, max(P[2] for P in _bk) + 0.05)
+BOOK_R = max(math.hypot(P[0], P[1] - 0.03) for P in _bk) + 0.04
+BOOK_PSI = (min(math.atan2(P[0], P[1] - 0.03) for P in _bk) - 0.1, max(math.atan2(P[0], P[1] - 0.03) for P in _bk) + 0.1)
 
 
 def cape_ab(z):
@@ -29,15 +35,15 @@ def envelope(psi, z):
         r = max(r, ell_r(a, b, psi))
     if 7.6 <= z <= 9.3:
         r = max(r, ell_r(0.7, 0.55, psi))
-    if z < 8.2:
-        a = SA((8.4 - z) / 7.05) + 0.16
+    if z < 8.2 + SK_DZ:
+        a = SA((SK_TOP + SK_DZ - z) / 7.05) + 0.16
         r = max(r, ell_r(a, 0.88 * a, psi))
-        if abs(psi) < 0.75 and 6.3 < z < 8.5:          # back bow and its tails
+        if abs(psi) < 0.75 and 6.3 + SK_DZ < z < 8.5 + SK_DZ:          # back bow and its tails
             r = max(r, 0.88 * (SA((8.4 - 8.0) / 7.05) + 0.2) + 0.32)
-    if 1.25 < abs(psi) < 1.95 and 7.1 < z < 9.05:      # forearms and hands below the capelet
-        r = max(r, 1.45)
-    if 1.6 < psi < 2.1 and 6.0 < z < 7.6:              # the book in her left hand
-        r = max(r, 1.68)
+    if 1.2 < abs(psi) < 2.0 and ARM_ENV[-1][0] < z < ARM_ENV[0][0]:      # arms and hands below the capelet
+        r = max(r, float(np.interp(z, [e[0] for e in ARM_ENV[::-1]], [e[1] for e in ARM_ENV[::-1]])))
+    if BOOK_PSI[0] < psi < BOOK_PSI[1] and BOOK_Z[0] < z < BOOK_Z[1]:   # the book in her left hand
+        r = max(r, BOOK_R)
     return r
 
 
@@ -126,10 +132,12 @@ down the fall. hdw keeps a lock's width steady as the hair spreads.""")
     sc.func('hdw(t)', 'min(1,1.54/(hrx(t)+hry(t)))')
     sc.comment(f"""Her head is tilted and turned (see the generator); a lock turns with it where it lies on the head and
 hangs straight below. hb(t) is 1 on the head and eases to 0 by t = {fmt(T0 + TB)}; hs and hk are the sine and
-one minus the cosine of the head's turn times hb.""")
+one minus the cosine of the head's turn times hb, and hm scales the lock with the head where it lies on it.""")
     sc.func('hb(t)', f"1-min(1,max(0,(t-{fmt(T0)})/{fmt(TB)}))^2*(3-2*min(1,max(0,(t-{fmt(T0)})/{fmt(TB)})))")
     sc.func('hs(t)', f"sin({fmt(HEAD_TURN['angle'])}*hb(t))")
     sc.func('hk(t)', f"1-cos({fmt(HEAD_TURN['angle'])}*hb(t))")
+    sc.func('hm(t)', f"1-{fmt(1 - HEAD_TURN['scale'])}*hb(t)")
+    HB = ('hs(t)', 'hk(t)', 'hm(t)')
     sc.comment("""A lock is a tube around its own flow line. lpc is the angle of that line around the head: a starting
 angle pb+p0 (0 = straight back, + toward her left) whose part p0 closes up by sg as the hair spreads (sg = 1
 falls straight down, sg = 0 fans out over the shoulders; pb is 0 for the back and pi for the front), a drift dr, and a wave of size am that grows down the
@@ -153,7 +161,7 @@ quarters of a circle: sideways like a hook, or outward like a scroll.""")
         WD = f"lwd(t,{fmt(te)},{fmt(hw)})"
         TH = f"lth(t,w,{fmt(te)},{fmt(th)})"
         end = te if curl is None else te - 0.08
-        with sc.turned(**HEAD_TURN, blend=('hs(t)', 'hk(t)')):
+        with sc.turned(**HEAD_TURN, blend=HB):
             sc.surface((f"(hrx(t)+({RC}+{TH})*sin(ha(t)))*sin({PC}+{WD}*cos(w))", f"{fmt(HY0)}+(hry(t)+({RC}+{TH})*sin(ha(t)))*cos({PC}+{WD}*cos(w))",
                         f"hzz(t)+({RC}+{TH})*cos(ha(t))"), ('t', start, end), ('w', 0, '2*pi'), col, ref, ('tube', 'u'))
         if curl is None:
@@ -178,7 +186,7 @@ eye and a little higher above her right eye, where the forehead shows between th
     with sc.turned(**HEAD_TURN):
         sc.surface((f"{fmt(HDX * 0.98)}*sin(u*{CAPM})*cos(v)", f"{fmt(HY0)}+{fmt(HDY * 0.98)}*sin(u*{CAPM})*sin(v)", f"{fmt(ZHC)}+{fmt(HDZ * 0.98)}*cos(u*{CAPM})"),
                ('u', 0, 1), ('v', '-pi', 'pi'), HAIR_DK, 'hairCap', ('point', (0, HY0, ZHC)))
-    with sc.turned(**HEAD_TURN, blend=('hs(t)', 'hk(t)')):
+    with sc.turned(**HEAD_TURN, blend=HB):
         sc.surface(("(hrx(t)-0.03)*sin(k*(1-0.64*(1-hdw(t))))", f"{fmt(HY0)}+(hry(t)-0.03)*cos(k*(1-0.64*(1-hdw(t))))", "hzz(t)"),
                    ('t', T0 * 0.9, 0.7), ('k', -1.2, 1.2), HAIR_DK, 'hairUnder', ('point', (0, 0, 9)))
 
