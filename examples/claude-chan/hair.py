@@ -10,6 +10,7 @@ T0 = 1 / (1 + (ZHC - ZBOT) / (HDZ * math.pi / 2))   # part of a lock's length th
 VF = HDZ * math.pi / 2 / T0              # how fast z falls with t below the dome
 
 _cape = [bezier_eval(CAPE, s) for s in np.linspace(0, 1, 200)]
+_cape_s = list(zip(np.linspace(0, 1, 200), _cape))
 # how far out the arms reach (the sleeve, cuff and hand around the arm's line), by height
 ARM_ENV = [(9.1, 1.5), (8.42, 1.65), (7.6, 1.78), (7.12, 2.0), (6.6, 2.15), (6.1, 2.25), (5.75, 2.1)]
 _bk = BOOK[2]
@@ -30,16 +31,23 @@ def ell_r(a, b, psi):
 def envelope(psi, z):
     """Distance from the body axis to the outside of the figure at angle psi from the back."""
     r = 0.3
-    if 8.9 <= z <= 10.75:
-        a, b = cape_ab(z)
-        r = max(r, ell_r(a, b, psi))
+    if 8.1 <= z <= 10.75:                       # the capelet, longer and fuller at the back
+        th = math.pi - abs(psi)
+        dr = cape_drop(th)
+        best = min(_cape_s, key=lambda p: abs(p[1][0] - dr * p[0] ** 2 - z))
+        sp, (zc_, a, b) = best
+        if abs(zc_ - dr * sp ** 2 - z) < 0.05:
+            r = max(r, ell_r(a, b + CAPE_FLARE * sp ** 2 * max(0.0, -math.cos(th)), psi))
     if 7.6 <= z <= 9.3:
         r = max(r, ell_r(0.7, 0.55, psi))
-    if z < 8.2 + SK_DZ:
-        a = SA((SK_TOP + SK_DZ - z) / 7.05) + 0.16
-        r = max(r, ell_r(a, 0.88 * a, psi))
-        if abs(psi) < 0.75 and 6.3 + SK_DZ < z < 8.5 + SK_DZ:          # back bow and its tails
-            r = max(r, 0.88 * (SA((8.4 - 8.0) / 7.05) + 0.2) + 0.32)
+    if z < SK_TOP - 0.2:
+        th = math.pi - abs(psi)                     # angle from the front
+        s = sk_s(z)
+        a = (OSR(z) + 0.12) if OV_F - 0.2 < th < OV_B + 0.2 and z > 2.5 else SA(s) + 0.16
+        r = max(r, a * math.hypot(math.sin(th), DK(s, th) * math.cos(th)))
+        for th_b, z_b in ((OV_B, BOW_ZB), (OV_F, BOW_ZF)):     # the bows, their tails and tassels
+            if abs(th - th_b) < 0.4 and z_b - 1.0 < z < z_b + 0.35:
+                r = max(r, (OSR(z_b) + 0.1) * math.hypot(math.sin(th_b), DK(sk_s(z_b), th_b) * math.cos(th_b)) + 0.3)
     if 1.2 < abs(psi) < 2.0 and ARM_ENV[-1][0] < z < ARM_ENV[0][0]:      # arms and hands below the capelet
         r = max(r, float(np.interp(z, [e[0] for e in ARM_ENV[::-1]], [e[1] for e in ARM_ENV[::-1]])))
     if BOOK_PSI[0] < psi < BOOK_PSI[1] and BOOK_Z[0] < z < BOOK_Z[1]:   # the book in her left hand

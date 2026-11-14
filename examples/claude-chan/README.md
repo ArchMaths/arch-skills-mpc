@@ -54,10 +54,21 @@ surface precision* slider in Arch's settings for faster redraws while rotating.
 - **Accessories**: a chrysanthemum on a black bow with cream ribbons and a gold tassel above her left
   ear; gold tassel earrings.
 - **Outfit**: high ruffled collar and jabot, black ascot with a chrysanthemum brooch, cream capelet with
-  gold trim and chrysanthemum emblems, bishop sleeves with lacing and two-tone ruffled cuffs, black
-  corset with gold buttons, piping, chain, ring and tassel, a pleated cream skirt with orange
-  embroidery, a frilled petticoat, a black overskirt lined in orange with gold-trimmed lapels, hip bows
-  with chrysanthemums, chains and tassels, an orange back panel with a black bow, cream lace-up boots.
+  gold trim and chrysanthemum emblems (longer and fuller at the back, as in the side and back views),
+  bishop sleeves with lacing and two-tone ruffled cuffs, black corset with gold buttons, piping, chain,
+  ring and tassel, cream lace-up boots.
+- **Dress**: modelled from the sheet's three views and its skirt panel (三片式长裙与褶边衬裙). A pleated
+  cream skirt with a frilled petticoat and orange fern embroidery where it shows at the front and back.
+  Seen from the front it is a straight A-line from the corset; seen from the side the front hangs nearly
+  flat and the back is full (the depth is 0.57 of the half-width at the front and 0.75 to 1 at the back).
+  Over it, on each side, a black panel with an orange facing, gold bands and chrysanthemum emblems, and
+  over that a cream overskirt piece lined in orange. Each overskirt piece is caught up by a black bow at
+  the front (37 degrees from the front) and one at the back (149 degrees), each bow with a chrysanthemum,
+  long tails and two gold tassels, so its hem swags from the bows down to just above the black panel's
+  hem behind the side and the lining shows where the hem turns. Black bands run down the overskirt's
+  edges from the waist to the bows; an orange tab hangs on her left of the front and a longer one at the
+  centre back, both cut on a slant. The sheet's side view matches the model turned about 30 degrees
+  toward the front, which is how its bows, front tab and swag appear there.
 - **Hands**: palm, two-jointed fingers and thumb, half as long as her head and about as wide as the
   cuffs they come out of, as on the sheet. Her right hand hangs relaxed and turned out; her left holds the
   book at her side.
@@ -116,8 +127,12 @@ node src/cli.js examples/claude-chan/claude-chan-3d.arch -o examples/claude-chan
   detail and scaled down (0.82) about the same point, by the same block; the long locks ease from that
   scale to none as they leave the head. Earrings and tassels hang straight from their turned attachment
   points and are scaled with the head.
-- **Skirt.** The skirt is drawn from z 8.4 to 1.35 and raised as a whole (a raised block adds to every
-  z), so its many parts keep their own measurements.
+- **Skirt.** Every layer is written around the same skirt: at height h and angle t from the front it lies at
+  half-width `sa(s)` (s from the waist to the hem) times `sin(t)` across and `dk(s,t) cos(t)` deep, so the
+  layers stack at small offsets. The overskirt pieces, black panels and tabs are each a strip of that
+  surface between two angles, with a top and hem that vary across the strip (`ozh`, `bzh`). The tabs are
+  laid out by x across the back or front (`asin(x/a)` gives the angle), so their edges are straight lines as
+  drawn.
 - **Braid.** Three strands follow an oval ring on the dome and weave as `sin(tau)` across the ring and
   `sin(2 tau)` in height, a third of a turn apart.
 - Arch lights a surface at half strength where its normal faces away from the camera, so the generator

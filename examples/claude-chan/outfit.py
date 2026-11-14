@@ -48,15 +48,27 @@ def flat_flower(C, n_dir, R, ref, color=ORANGE, center=GOLD, n=14, up=(0, 0, 1))
         sc.surface(place(L, C, fr), ('r', 0, 1), ('w', 0, '2*pi'), center, ref + 'Mid', ('dir', fr[2]))
 
 
-SK_TOP, SK_HEM, SK_DZ = 8.4, 1.35, 0.26    # the skirt is drawn from z 8.4 to 1.35, then raised by SK_DZ (the boots show)
-OZ_TOP = 7.8                                # top of the overskirt, just under the corset's lower edge once raised
-SA_EXPR = '0.43+3.7*s*(1-exp(-s/0.06))-6.5*max(0,s-0.62)^2'
+SK_TOP, SK_HEM = 8.66, 1.61      # the pleated skirt, from the waist (under the corset) to its hem; the boots show below
+SK_L = SK_TOP - SK_HEM
+SA_EXPR = '0.43+0.079*ln(1+exp((s-0.057)/0.02))-6.5*max(0,s-0.62)^2'
+DK_EXPR = '0.66+0.125*s-(0.09+0.125*s)*cos(t)'
 
 
 def SA(s):
-    """Underskirt radius, s from the waist (0) to the hem (1): it leaves the corset, then flares in the
-    straight A-line of the sheet's front view (about 0.56 out per unit down) and rounds off at the hem."""
-    return 0.43 + 3.7 * s * (1 - math.exp(-s / 0.06)) - 6.5 * max(0, s - 0.62) ** 2
+    """Half-width of the skirt, s from the waist (0) to the hem (1): narrow inside the corset, then from the
+    corset's edge the straight A-line of the sheet's front view (0.56 out per unit down, joined smoothly),
+    rounding off at the hem."""
+    return 0.43 + 0.079 * math.log(1 + math.exp((s - 0.057) / 0.02)) - 6.5 * max(0, s - 0.62) ** 2
+
+
+def DK(s, th):
+    """Depth of the skirt over its half-width at angle th from the front: the sheet's side view has the front
+    hanging nearly flat (0.57) and the back full (0.75 at the waist to 1 at the hem)."""
+    return 0.66 + 0.125 * s - (0.09 + 0.125 * s) * math.cos(th)
+
+
+def sk_s(h):
+    return (SK_TOP - h) / SK_L
 
 
 # =====================================================================
@@ -117,18 +129,27 @@ if want('body'):
 # =====================================================================
 #  CAPELET
 # =====================================================================
-CAPE = [(10.7, 0.3, 0.28), (10.52, 0.6, 0.44), (10.3, 1.2, 0.68), (9.8, 1.48, 0.84), (9.3, 1.62, 0.92), (9.12, 1.66, 0.94)]
+CAPE = [(10.7, 0.3, 0.28), (10.52, 0.6, 0.43), (10.3, 1.18, 0.64), (9.8, 1.48, 0.82), (9.3, 1.62, 0.92), (9.12, 1.66, 0.94)]
+CAPE_DROP, CAPE_FLARE = 0.95, 0.24     # the sheet's capelet is longer at the back (hem near the elbows) and stands out there
+
+
+def cape_drop(th):
+    """How far the capelet's hem hangs lower at angle th from the front (0 at the sides, CAPE_DROP at the back)."""
+    return CAPE_DROP * max(0.0, -math.cos(th)) ** 1.5
 if want('cape'):
     sc.blank()
     sc.note('Capelet: cream with gold trim, beige lining and chrysanthemum emblems')
     cz_, ca_, cb_ = bezier_poly(CAPE)
     Zc, Ac, Bc = horner(cz_, 's'), horner(ca_, 's'), horner(cb_, 's')
-    sc.comment("Capelet: s from the collar to the hem; q around from her right front edge, over the back, to her left front edge.")
+    sc.comment("""Capelet: s from the collar to the hem; q around from her left front edge, over the back, to her right
+front edge (cth is the angle from the front). As on the sheet's side and back views it hangs lower at the
+back (cdr) and stands out there (the flare in y).""")
     sc.func('cth(s,q)', '(0.3+0.32*s)+(2*pi-2*(0.3+0.32*s))*q')
+    sc.func('cdr(s,q)', f"{fmt(CAPE_DROP)}*s^2*max(0,-cos(cth(s,q)))^1.5")
     def cape(scale, qr, sr, color, ref, dz=0.0):
         X = f"{fmt(scale)}*({Ac})*sin(cth(s,q))"
-        Y = f"0.03-{fmt(scale)}*({Bc})*cos(cth(s,q))"
-        Z = f"{Zc}+{fmt(dz)}"
+        Y = f"0.03-{fmt(scale)}*({Bc}+{fmt(CAPE_FLARE)}*s^2*max(0,-cos(cth(s,q))))*cos(cth(s,q))"
+        Z = f"{Zc}-cdr(s,q)+{fmt(dz)}"
         sc.surface((X, Y, Z), ('s', sr[0], sr[1]), ('q', qr[0], qr[1]), color, ref, ('point', (0, 0.03, 10.4)))
     cape(1.0, (0, 1), (0, 1), CREAM, 'cape')
     cape(0.985, (0, 1), (0.02, 1), CREAM_DK, 'capeLining', dz=0.004)
@@ -241,8 +262,10 @@ def place_book():
     Bc = add(add(palm, mul(cover_n, 0.032 * HS + 0.1)), mul(up, -0.36))
 
     def clear(P):
-        a = SA((SK_TOP + SK_DZ - P[2]) / 7.05) + 0.1
-        return math.hypot(P[0] / a, P[1] / (0.88 * a))
+        s = sk_s(P[2])
+        a = SA(s) + 0.1
+        th = math.atan2(P[0], -P[1])
+        return math.hypot(P[0] / a, P[1] / (DK(s, th) * a))
     box = [(i, j, k) for i in (-1, 0, 1) for j in (-1, -0.5, 0, 0.5, 1) for k in (-1, 1)]
     for _ in range(100):
         pts_ = [add(add(add(Bc, mul(across, 0.38 * i)), mul(up, 0.52 * j)), mul(cover_n, 0.09 * k)) for i, j, k in box]
@@ -323,136 +346,186 @@ if want('corset'):
     flat_flower((0, corset_front(0, 8.1, 0.01), 8.1), unit((0, -1, 0.1)), 0.06, 'corsetFlower', n=10, center=GOLD_DK)
 
 # =====================================================================
-#  SKIRT: cream pleated underskirt with embroidery, petticoat, black overskirt with orange lining
+#  SKIRT, after the sheet's three views and its skirt panel (三片式长裙与褶边衬裙):
+#  a pleated cream skirt with a frilled petticoat; black panels at the sides; over them a cream overskirt
+#  in two side pieces, each caught up by a bow at the front and one at the back so its hem swags low at
+#  the side; black bands down the overskirt's edges to the bows; an orange tab at the front and the back.
 # =====================================================================
+def skirt_point(h, th, off=0.0):
+    """Point at height h and angle th (from the front, + toward her left) on the pleated skirt, off further out."""
+    s = sk_s(h)
+    a = SA(s) + off
+    return (a * math.sin(th), -a * DK(s, th) * math.cos(th), h)
 
 
+def skirt_normal(h, th):
+    s = sk_s(h)
+    k = DK(s, th)
+    return unit((k * math.sin(th), -math.cos(th), 0.45 * math.hypot(k * math.sin(th), math.cos(th))))
 
-def skirt_point(s, w, scale=1.0):
-    a = SA(s) * scale
-    return (a * math.cos(w), 0.88 * a * math.sin(w), SK_TOP - (SK_TOP - SK_HEM) * s)
+
+OV_F, OV_B = 0.64, 2.6          # the overskirt pieces run from 37 degrees (front bows) to 149 (back bows)
+OV_TOP = 8.2                    # their top, under the corset's lower edge
+BOW_ZF, BOW_ZB = 6.0, 5.65      # heights of the front and back bows
+
+
+def OSR(h):
+    """Radius of the overskirt at height h (before its folds)."""
+    return SA(sk_s(h)) + 0.17 * min(1, max(0, OV_TOP - h) / 0.3)
 
 
 if want('skirt'):
-    with sc.raised(SK_DZ):            # drawn from z 8.4 down to 1.35, then raised (see SK_DZ)
-        sc.blank()
-        sc.note('Skirt: cream pleated underskirt with orange embroidery and a frilled petticoat')
-        sc.comment(f"Underskirt: s from the waist (z={fmt(SK_TOP + SK_DZ)}) to the hem (z={fmt(SK_HEM + SK_DZ)}); sa is its A-line flare, with 24 soft pleats.")
-        sc.func('sa(s)', SA_EXPR)
-        sc.func('spl(s,w)', '1+0.02*(0.25+0.75*s)*sin(24*w)')
-        sc.surface(("sa(s)*spl(s,w)*cos(w)", "0.88*sa(s)*spl(s,w)*sin(w)", "8.4-7.05*s"), ('s', 0, 1), ('w', 0, '2*pi'), CREAM, 'underskirt', ('tube', 'u'))
-        for k, (z0, z1, r0, r1, nw, col) in enumerate([(1.4, 1.06, 0.99, 1.05, 30, CREAM), (1.14, 0.88, 1.0, 1.07, 38, '#f8f2e8')]):
-            Rk = f"sa(1)*({fmt(r0)}+{fmt(r1 - r0)}*s+0.022*s*sin({nw}*w))"
-            sc.surface((f"{Rk}*cos(w)", f"0.88*{Rk}*sin(w)", f"{fmt(z0)}-{fmt(z0 - z1)}*s+0.03*s*cos({nw}*w)"),
-                       ('s', 0, 1), ('w', 0, '2*pi'), col, f'petticoat{k + 1}', ('tube', 'u'))
-        # embroidery on the front of the underskirt
-        sc.comment("Embroidery: looping vines and fern sprigs in orange thread, small chrysanthemums between them.")
-        def on_skirt(sx, wx, lift=1.012):
-            return (f"sa({sx})*spl({sx},{wx})*{fmt(lift)}*cos({wx})", f"0.88*sa({sx})*spl({sx},{wx})*{fmt(lift)}*sin({wx})", f"8.4-7.05*({sx})")
-        sc.curve(on_skirt("0.875+0.028*sin(26*t)", "(-pi/2+t+0.03*cos(26*t))"), ('t', -1.25, 1.25), ORANGE, 'vine', thickness=2)
-        sc.curve(on_skirt("0.94", "(-pi/2+t)"), ('t', -1.35, 1.35), ORANGE, 'hemLine1', thickness=2)
-        sc.curve(on_skirt("0.955", "(-pi/2+t)"), ('t', -1.35, 1.35), GOLD, 'hemLine2', thickness=2)
-        sc.curve(on_skirt("0.8", "(-pi/2+t)"), ('t', -1.2, 1.2), ORANGE, 'hemLine3', thickness=2)
-        for i, w0 in enumerate([-0.98, -0.56, -0.14, 0.28, 0.7]):
-            wc = -math.pi / 2 + w0 + 0.21
+    sc.blank()
+    sc.note('Skirt: cream pleated skirt with orange embroidery and a frilled petticoat')
+    sc.comment(f"""Skirt: s from the waist (z={fmt(SK_TOP)}) to the hem (z={fmt(SK_HEM)}); t is the angle from the front, + toward her
+left. sa(s) is its half-width: the straight A-line of the front view. Seen from the side the front hangs
+nearly flat and the back is full, so the depth is dk(s,t) times the half-width: 0.57 at the front, 0.75
+to 1 at the back from the waist to the hem. 24 soft pleats (spl). sz(h) is s at height h.""")
+    sc.func('sa(s)', SA_EXPR)
+    sc.func('dk(s,t)', DK_EXPR)
+    sc.func('sz(h)', f"({fmt(SK_TOP)}-h)/{fmt(SK_L)}")
+    sc.func('spl(s,t)', '1+0.02*(0.25+0.75*s)*sin(24*t)')
+    Zs = f"{fmt(SK_TOP)}-{fmt(SK_L)}*s"
+    sc.surface(("sa(s)*spl(s,t)*sin(t)", "-sa(s)*spl(s,t)*dk(s,t)*cos(t)", Zs), ('s', 0, 1), ('t', '-pi', 'pi'), CREAM, 'underskirt', ('tube', 'u'))
+    for k, (z0, z1, r0, r1, nw, col) in enumerate([(1.66, 1.32, 0.99, 1.05, 30, CREAM), (1.4, 1.14, 1.0, 1.07, 38, '#f8f2e8')]):
+        Rk = f"sa(1)*({fmt(r0)}+{fmt(r1 - r0)}*s+0.022*s*sin({nw}*t))"
+        sc.surface((f"{Rk}*sin(t)", f"-{Rk}*dk(1,t)*cos(t)", f"{fmt(z0)}-{fmt(z0 - z1)}*s+0.03*s*cos({nw}*t)"),
+                   ('s', 0, 1), ('t', '-pi', 'pi'), col, f'petticoat{k + 1}', ('tube', 'u'))
+    sc.comment("Embroidery where the pleated skirt shows, at the front and the back: hem lines and fern sprigs in orange thread.")
+
+    def on_skirt(sx, tx, lift=1.012):
+        return (f"sa({sx})*spl({sx},{tx})*{fmt(lift)}*sin({tx})", f"-sa({sx})*spl({sx},{tx})*dk({sx},{tx})*{fmt(lift)}*cos({tx})", f"{fmt(SK_TOP)}-{fmt(SK_L)}*({sx})")
+    for side, nm, c0, hw in (('Front', 'F', 0.0, 0.33), ('Back', 'B', math.pi, 0.3)):
+        sc.curve(on_skirt("0.955", f"({fmt(c0)}+t)"), ('t', -hw, hw), GOLD, f'hemLine{nm}1', thickness=2)
+        sc.curve(on_skirt("0.94", f"({fmt(c0)}+t)"), ('t', -hw, hw), ORANGE, f'hemLine{nm}2', thickness=2)
+        sc.curve(on_skirt("0.875+0.022*sin(30*t)", f"({fmt(c0)}+t+0.012*cos(30*t))"), ('t', -hw, hw), ORANGE, f'vine{nm}', thickness=2)
+        n_sp = 5 if nm == 'F' else 4
+        for i in range(n_sp):
+            tc = c0 + hw * 0.85 * (2 * i / (n_sp - 1) - 1)
             for k, sg in enumerate((1, -1)):
-                sx = "(0.93-0.12*t)"
-                wx = f"({fmt(wc)}+{fmt(sg)}*0.022*abs(sin(5*pi*t))*(1-t)/sa({sx}))"
-                sc.curve(on_skirt(sx, wx), ('t', 0, 1), ORANGE_LT, f'sprig{i + 1}{"ab"[k]}', thickness=2)
-        for i, w0 in enumerate([-1.05, -0.63, -0.21, 0.21, 0.63, 1.05]):
-            w = -math.pi / 2 + w0
-            s = 0.875
-            P = skirt_point(s, w, 1.02)
-            n = unit((math.cos(w) / 1.0, math.sin(w) / 0.88, 0.32))
-            flat_flower(P, n, 0.085, f'hemFlower{i + 1}', n=12, center=GOLD)
+                sx = "(0.93-0.13*t)"
+                tx = f"({fmt(tc)}+{fmt(sg)}*0.024*abs(sin(5*pi*t))*(1-t)/sa({sx}))"
+                sc.curve(on_skirt(sx, tx), ('t', 0, 1), ORANGE_LT, f'sprig{nm}{i + 1}{"ab"[k]}', thickness=2)
 
-        sc.blank()
-        sc.note('Overskirt: black panels lined in orange, open at the front and draped up at the edges')
-        sc.comment("""Overskirt: s from the waist down, q around from her right front edge, over the back, to her left
-    front edge. The opening widens downward (oth) and the hem lifts near the opening (ozh).""")
-        sc.func('oth(s)', '0.28+0.44*s')
-        sc.func('ophi(s,q)', 'oth(s)+(2*pi-2*oth(s))*q')
-        sc.func('ozh(f)', '1.55+2.2*max(0,cos(f))^2')
-        sc.func('oz(s,f)', f'{fmt(OZ_TOP)}-({fmt(OZ_TOP)}-ozh(f))*s')
-        sc.func('orad(s,f)', '(sa((8.4-oz(s,f))/7.05)+0.07)*(1+0.028*s*sin(9*f))')
-        def over(scale, sr, qr, color, ref, dr=0.0):
-            F = "ophi(s,q)"
-            X = f"({fmt(scale)}*orad(s,{F})+{fmt(dr)})*sin({F})"
-            Y = f"-0.88*({fmt(scale)}*orad(s,{F})+{fmt(dr)})*cos({F})"
-            sc.surface((X, Y, f"oz(s,{F})"), ('s', sr[0], sr[1]), ('q', qr[0], qr[1]), color, ref, ('point', (0, 0, 6)))
-        over(1.0, (0, 1), (0, 1), BLACK, 'overskirt')
-        over(0.988, (0.03, 1), (0, 1), ORANGE, 'overskirtLining')
-        # orange lapels: the front edges turned back
-        sc.func('olw(s)', '0.02+0.11*s')
-        for side, tag in ((1, 'R'), (-1, 'L')):
-            qa, qb = ("0", "olw(s)") if side > 0 else ("1-olw(s)", "1")
-            F = f"ophi(s,{qa}+({qb}-{qa})*p)"
-            X = f"(orad(s,{F})+0.012)*sin({F})"
-            Y = f"-0.88*(orad(s,{F})+0.012)*cos({F})"
-            sc.surface((X, Y, f"oz(s,{F})"), ('s', 0.02, 1), ('p', 0, 1), ORANGE, f'lapel{tag}', ('point', (0, 0, 6)))
-            F = f"ophi(s,{qb if side > 0 else qa}+{fmt(0.006 * side)}*p)"
-            X = f"(orad(s,{F})+0.016)*sin({F})"
-            Y = f"-0.88*(orad(s,{F})+0.016)*cos({F})"
-            sc.surface((X, Y, f"oz(s,{F})"), ('s', 0.02, 1), ('p', 0, 1), GOLD, f'lapelTrim{tag}', ('point', (0, 0, 6)))
-        F = "ophi(1,q)"
-        sc.surface((f"(orad(1,{F})+0.012)*sin({F})", f"-0.88*(orad(1,{F})+0.012)*cos({F})", f"oz(1,{F})+0.06*p"),
-                   ('q', 0.0, 1), ('p', 0, 1), GOLD, 'overskirtHemTrim', ('point', (0, 0, 6)))
-        for i, (s, q) in enumerate([(0.86, 0.12), (0.88, 0.3), (0.88, 0.7), (0.86, 0.88)]):
-            f = 0.28 + 0.44 * s
-            f = f + (2 * math.pi - 2 * f) * q
-            zf = OZ_TOP - (OZ_TOP - (1.55 + 2.2 * max(0, math.cos(f)) ** 2)) * s
-            a = SA((8.4 - zf) / 7.05) + 0.07
-            P = (a * 1.02 * math.sin(f), -0.88 * a * 1.02 * math.cos(f), zf)
-            n = unit((math.sin(f), -math.cos(f) / 0.88, 0.3))
-            flat_flower(P, n, 0.11, f'overFlower{i + 1}', n=12, center=GOLD)
+    sc.blank()
+    sc.note('Skirt: black side panels with orange facings, gold bands and chrysanthemum emblems')
+    sc.comment("""Black side panels under the overskirt, from 20 to 162 degrees on each side (the pleated skirt shows
+at the front and the back), from just under the bows down to a hem near 2; their lower corners flare a little.
+q runs across a panel from its front edge, p down it.""")
+    sc.func('bzh(q)', '1.95+0.1*sin(pi*q)')
+    sc.func('bph(q,p)', '5.95-0.45*q-(5.95-0.45*q-bzh(q))*p')
+    TB0, TB1 = 0.35, 2.83
+    for sd, tag in ((1, 'L'), (-1, 'R')):
+        TH = f"({fmt(TB0)}+{fmt(TB1 - TB0)}*q)"
+        H = "bph(q,p)"
+        R = f"(sa(sz({H}))+0.09+0.12*p^4*sin(pi*q)^2)"
+        sc.surface((f"{fmt(sd)}*{R}*sin({TH})", f"-{R}*dk(sz({H}),{TH})*cos({TH})", H), ('q', 0, 1), ('p', 0, 1), BLACK, f'sidePanel{tag}', ('point', (0, 0, 4)))
+        # the front edge turned back: an orange facing, edged in gold
+        TF = f"({fmt(TB0 - 0.01)}+0.075*q)"
+        H = f"bph(0,p)"
+        R = f"(sa(sz({H}))+0.105)"
+        sc.surface((f"{fmt(sd)}*{R}*sin({TF})", f"-{R}*dk(sz({H}),{TF})*cos({TF})", H), ('q', 0, 1), ('p', 0, 1), ORANGE, f'sideFacing{tag}', ('point', (0, 0, 4)))
+        sc.curve((f"{fmt(sd)}*(sa(sz(bph(0,t)))+0.11)*sin({fmt(TB0 + 0.065)})", f"-(sa(sz(bph(0,t)))+0.11)*dk(sz(bph(0,t)),{fmt(TB0 + 0.065)})*cos({fmt(TB0 + 0.065)})", "bph(0,t)"),
+                 ('t', 0, 1), GOLD, f'sideFacingTrim{tag}', thickness=2)
+        for k, pp in enumerate((0.94, 0.985)):
+            Hq = f"bph(t,{pp})"
+            Rq = f"(sa(sz({Hq}))+0.105+0.12*{fmt(pp ** 4)}*sin(pi*t)^2)"
+            TQ = f"({fmt(TB0)}+{fmt(TB1 - TB0)}*t)"
+            sc.curve((f"{fmt(sd)}*{Rq}*sin({TQ})", f"-{Rq}*dk(sz({Hq}),{TQ})*cos({TQ})", Hq), ('t', 0, 1), GOLD, f'sideBand{tag}{k + 1}', thickness=2)
+        for k, q in enumerate((0.12, 0.88)):
+            th = sd * (TB0 + (TB1 - TB0) * q)
+            top = 5.95 - 0.45 * q
+            h = top - (top - (1.95 + 0.1 * math.sin(math.pi * q))) * 0.8
+            flat_flower(skirt_point(h, th, 0.105), skirt_normal(h, th), 0.17, f'sideEmblem{tag}{k + 1}', n=12, color=ORANGE, center=GOLD)
 
-        sc.blank()
-        sc.note('Back: long orange centre panel and a black bow')
-        sc.func('bpw(s)', '0.17+0.25*s')
-        F = "(pi+bpw(s)*p)"
-        Zb = "8.05-6.95*s"
-        Rb = f"(sa((8.4-({Zb}))/7.05)+0.12)*(1+0.02*sin(7*p))"
-        sc.surface((f"{Rb}*sin({F})", f"-0.88*{Rb}*cos({F})", Zb), ('s', 0, 1), ('p', -1, 1), ORANGE, 'backPanel', ('point', (0, 0, 6)))
-        for k, pp in enumerate((-1, 1)):
-            F = f"(pi+bpw(s)*{pp}*(1-0.08*p))"
-            Rb2 = f"(sa((8.4-({Zb}))/7.05)+0.13)"
-            sc.surface((f"{Rb2}*sin({F})", f"-0.88*{Rb2}*cos({F})", Zb), ('s', 0, 1), ('p', 0, 1), GOLD, f'backPanelTrim{k + 1}', ('point', (0, 0, 6)))
-        zb = 8.0
-        a = SA((8.4 - zb) / 7.05) + 0.2
-        bow((0, 0.88 * a, zb), ((1, 0, 0), (0, 0, 1), (0, 1, 0)), (0.42, 0.19, 0.08), 'backBow', loops=((1, -0.12), (-1, -0.12)))
-        for side, tag in ((1, 'L'), (-1, 'R')):
-            ribbon([(0.05 * side, 0.88 * a, zb - 0.08), (0.22 * side, 0.88 * a + 0.12, zb - 0.8), (0.3 * side, 0.88 * a + 0.22, zb - 1.6)], 0.09, BLACK, f'backBowTail{tag}', (0, 1, 0), rim=GOLD)
+    sc.blank()
+    sc.note('Skirt: cream overskirt in two side pieces, caught up by bows at the front and the back')
+    sc.comment(f"""Overskirt: on each side a cream piece from {fmt(round(math.degrees(OV_F)))} to {fmt(round(math.degrees(OV_B)))} degrees, just outside the skirt
+(osr). Each end is caught up by a bow, so the hem (ozh, measured on the front and back views) rises
+steeply to the bows and swags down to 2.6 behind the side (110 degrees), so from the side the hem
+falls toward the back; the cloth falls in folds that deepen toward the hem. q runs across a piece from
+the front bow to the back bow, p down from the waist to the hem. Lined in orange, with the hem turned
+back over the side (oft) so the lining shows there, as drawn on the sheet.""")
+    sc.func('osr(h)', f"sa(sz(h))+0.17*min(1,max(0,{fmt(OV_TOP)}-h)/0.3)")
+    sc.func('ozh(q)', '2.6+2.87*max(0,1-q/0.653)^2.6+2.5*max(0,(q-0.653)/0.347)^1.6')
+    sc.func('oph(q,p)', f"{fmt(OV_TOP)}-({fmt(OV_TOP)}-ozh(q))*p")
+    sc.func('ofd(q,p)', '0.1*p^1.2*(0.5+0.5*sin(10*pi*q))')
+    sc.func('oft(q)', '0.26*sin(pi*q)^3')
+    TH = f"({fmt(OV_F)}+{fmt(OV_B - OV_F)}*q)"
+    for sd, tag in ((1, 'L'), (-1, 'R')):
+        for nm, col, dr, p0 in (('overskirt', CREAM, 0.0, 0.0), ('overskirtLining', ORANGE, -0.015, 0.03)):
+            H = "oph(q,p)"
+            R = f"(osr({H})+ofd(q,p)+{fmt(dr)})"
+            sc.surface((f"{fmt(sd)}*{R}*sin({TH})", f"-{R}*dk(sz({H}),{TH})*cos({TH})", H), ('q', 0, 1), ('p', p0, 1), col, f'{nm}{tag}', ('point', (0, 0, 4)))
+        H = "(ozh(q)+oft(q)*v)"
+        R = f"(osr(ozh(q))+ofd(q,1)+0.02+0.035*v)"
+        sc.surface((f"{fmt(sd)}*{R}*sin({TH})", f"-{R}*dk(sz(ozh(q)),{TH})*cos({TH})", H), ('q', 0, 1), ('v', 0, 1), ORANGE, f'overskirtTurn{tag}', ('point', (0, 0, 4)))
+        TT = TH.replace('q', 't')
+        R = "(osr(ozh(t))+ofd(t,1)+0.012)"
+        sc.curve((f"{fmt(sd)}*{R}*sin({TT})", f"-{R}*dk(sz(ozh(t)),{TT})*cos({TT})", "ozh(t)"), ('t', 0, 1), GOLD, f'overskirtHem{tag}', thickness=2)
+        H = "(ozh(t)+oft(t)+0.14+0.05*sin(40*t))"
+        R = f"(osr({H})+ofd(t,1)+0.012)"
+        sc.curve((f"{fmt(sd)}*{R}*sin({TT})", f"-{R}*dk(sz({H}),{TT})*cos({TT})", H), ('t', 0, 1), ORANGE, f'overskirtVine{tag}', thickness=2)
 
-        sc.blank()
-        sc.note('Hip bows: black with gold trim, chrysanthemum centre, gold chain and cream tassel')
-        for side, tag in ((1, 'L'), (-1, 'R')):
-            f = 0.82 * side
-            zb = 5.85                   # 6.1 once raised: the sheet's bows sit on the drape at mid-thigh
-            a = (SA((8.4 - zb) / 7.05) + 0.07)
-            P = (a * math.sin(f), -0.88 * a * math.cos(f), zb)
-            n = unit((math.sin(f), -math.cos(f) / 0.88, 0.25))
-            tang = unit((math.cos(f), 0.88 * math.sin(f), 0))
+        # black bands down the overskirt's front and back edges, from the waist to the bows
+        for nm, te, dirn, zb_ in (('F', OV_F, 1, BOW_ZF), ('B', OV_B, -1, BOW_ZB)):
+            H = f"({fmt(OV_TOP - 0.05)}-{fmt(OV_TOP - 0.05 - zb_)}*p)"
+            R = f"(osr({H})+0.02)"
+            TE = f"({fmt(te)}+{fmt(dirn)}*(v-0.25)*0.36/{R})"
+            sc.surface((f"{fmt(sd)}*{R}*sin({TE})", f"-{R}*dk(sz({H}),{TE})*cos({TE})", H), ('p', 0, 1), ('v', 0, 1), BLACK, f'edgeBand{nm}{tag}', ('point', (0, 0, 4)))
+            for k, vv in enumerate((-0.25, 1)):
+                Ht = H.replace('p', 't')
+                Rt = f"(osr({Ht})+0.026)"
+                TE = f"({fmt(te)}+{fmt(dirn * (vv - 0.25) * 0.36)}/{Rt})"
+                sc.curve((f"{fmt(sd)}*{Rt}*sin({TE})", f"-{Rt}*dk(sz({Ht}),{TE})*cos({TE})", Ht), ('t', 0, 1), GOLD, f'edgeBandTrim{nm}{tag}{k + 1}', thickness=2)
+
+    sc.blank()
+    sc.note('Skirt: orange tabs at the front (her left) and the back, edged in gold')
+    sc.comment("""The front tab hangs from the corset's point on her left of the centre line, widening down to a slanting
+cut that is lowest on the outside. The back tab hangs at the centre back to a slanting point, lowest on
+her left. Both lie on the pleated skirt; x is measured across, so each follows the skirt's curve.""")
+    # front tab: x from ftx0(h) to ftx1(h); its foot slants from 4.8 (inside) to 4.25 (outside)
+    sc.func('fth(v,p)', '8.0-(8.0-(4.8-0.55*v))*p')
+    FX = "(0.05+0.01*(8-fth(v,p))+(0.35+0.3*(8-fth(v,p)))*v)"
+    H = "fth(v,p)"
+    A = f"(sa(sz({H}))+0.07)"
+    TF = f"asin(min(0.97,{FX}/{A}))"
+    sc.surface((FX, f"-{A}*dk(sz({H}),{TF})*cos({TF})", H), ('v', 0, 1), ('p', 0, 1), ORANGE, 'frontTab', ('dir', (0, -1, 0.2)))
+    sc.func('bth(v,p)', '8.05-(8.05-(4.42+0.45*(1-2*v)))*p')
+    BX = "((0.35+0.12*(8.05-bth(v,p)))*(2*v-1))"
+    H = "bth(v,p)"
+    A = f"(sa(sz({H}))+0.07)"
+    TB = f"(pi-asin(min(0.97,{BX}/{A})))"
+    sc.surface((BX, f"-{A}*dk(sz({H}),{TB})*cos({TB})", H), ('v', 0, 1), ('p', 0, 1), ORANGE, 'backTab', ('dir', (0, 1, 0.2)))
+    for nm, fh, fx_, sgn in (('frontTab', 'fth', FX, -1), ('backTab', 'bth', BX, 1)):
+        for k, (vv, pp) in enumerate((('0', 't'), ('1', 't'), ('t', '1'))):
+            Ht = f"{fh}({vv},{pp})"
+            Xt = fx_.replace('fth(v,p)', Ht).replace('bth(v,p)', Ht).replace('*v)', f'*{vv})').replace('(2*v-1)', f'(2*{vv}-1)')
+            At = f"(sa(sz({Ht}))+0.077)"
+            Tt = f"asin(min(0.97,{Xt}/{At}))" if sgn < 0 else f"(pi-asin(min(0.97,{Xt}/{At})))"
+            sc.curve((Xt, f"-{At}*dk(sz({Ht}),{Tt})*cos({Tt})", Ht), ('t', 0, 1), GOLD, f'{nm}Trim{k + 1}', thickness=2)
+
+    sc.blank()
+    sc.note('Skirt: four black bows with chrysanthemums and gold tassels where the overskirt is caught up')
+    for sd, tag in ((1, 'L'), (-1, 'R')):
+        for fb, th0, zb_, sz_ in (('F', OV_F, BOW_ZF, 1.0), ('B', OV_B, BOW_ZB, 0.92)):
+            th = sd * th0
+            s_ = sk_s(zb_)
+            k_ = DK(s_, th)
+            P = ((OSR(zb_) + 0.03) * math.sin(th), -(OSR(zb_) + 0.03) * k_ * math.cos(th), zb_)
+            n = skirt_normal(zb_, th)
+            tang = unit((math.cos(th), k_ * math.sin(th), 0))
             upv = cross(n, tang)
-            C = add(P, mul(n, 0.08))
-            bow(C, (tang, upv, n), (0.3, 0.14, 0.07), f'hipBow{tag}', loops=((1, -0.15), (-1, -0.15)))
-            flower(add(C, mul(n, 0.07)), n, 0.12, f'hipFlower{tag}')
-            for k, (dx, ln) in enumerate(((0.05, 0.6), (-0.06, 0.5))):
+            C = add(P, mul(n, 0.07))
+            bow(C, (tang, upv, n), (0.56 * sz_, 0.22 * sz_, 0.09), f'bow{fb}{tag}', loops=((1, -0.2), (-1, -0.2)))
+            flower(add(add(C, mul(n, 0.08)), mul(upv, 0.2 * sz_)), n, 0.2 * sz_, f'bowFlower{fb}{tag}')
+            for k, (dx, ln) in enumerate(((0.09, 1.25), (-0.1, 1.05))):
                 b0 = add(C, mul(tang, dx))
-                ribbon([b0, add(add(b0, mul(tang, dx * 2)), (0, 0, -ln * 0.5)), add(add(b0, mul(tang, dx * 3.2)), add(mul(n, 0.04), (0, 0, -ln)))],
-                       0.055, BLACK, f'hipBowTail{tag}{k + 1}', n, rim=GOLD)
-            tassel(add(C, add(mul(n, 0.02), (0, 0, -0.12))), 0.62, CREAM, f'hipTassel{tag}', r=0.05)
-            # chain loop from the bow toward the back
-            f2 = 1.62 * side
-            zc = zb + 0.3
-            xs = []
-            for t in np.linspace(0, 1, 30):
-                ff = f + (f2 - f) * t
-                zz_ = zb + (zc - zb) * t - 0.45 * math.sin(math.pi * t)
-                aa = (SA((8.4 - zz_) / 7.05) + 0.1)
-                xs.append((aa * math.sin(ff), -0.88 * aa * math.cos(ff), zz_))
-            T = np.linspace(0, 1, 30)
-            polys = [np.polyfit(T, [p[i] for p in xs], 6)[::-1] for i in range(3)]
-            bead_tube(tuple(horner(list(pp), 't') for pp in polys), 22, 0.016, GOLD, f'hipChain{tag}', cross_a=(0, 0, 1), cross_b=n)
+                ln *= sz_
+                ribbon([b0, add(add(b0, mul(tang, dx * 2.2)), add(mul(n, 0.06), (0, 0, -ln * 0.5))), add(add(b0, mul(tang, dx * 3.6)), add(mul(n, 0.1), (0, 0, -ln)))],
+                       0.14, BLACK, f'bowTail{fb}{tag}{k + 1}', n, rim=GOLD, vcut=0.3)
+            for k, dx in enumerate((0.07, -0.08)):
+                tassel(add(add(C, mul(n, 0.1)), add(mul(tang, dx * sz_), (0, 0, -0.12))), 0.95 * sz_, GOLD, f'bowTassel{fb}{tag}{k + 1}', r=0.05)
 
 # =====================================================================
 #  BOOTS

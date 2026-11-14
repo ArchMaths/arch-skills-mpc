@@ -120,7 +120,6 @@ class Scene:
         self.report = []
         self.names = set()
         self.turn = None          # (pivot, axis, angle, blend, scale) while drawing inside a turned() block
-        self.lift = 0.0           # added to z while drawing inside a raised() block
 
     # Arch '^' -> Python; '^' binds tighter than unary minus in both.
     def py(self, expr):
@@ -183,15 +182,6 @@ class Scene:
         finally:
             self.turn = prev
 
-    @contextmanager
-    def raised(self, dz):
-        """Surfaces and curves drawn inside are moved up by dz."""
-        prev, self.lift = self.lift, self.lift + dz
-        try:
-            yield
-        finally:
-            self.lift = prev
-
     def turn_point(self, P, turn=None):
         """Where a point of a turned group ends up (rigid turn and scale)."""
         turn = turn or self.turn
@@ -235,16 +225,13 @@ class Scene:
                 out.append(e)
         return tuple(out)
 
-    def _lift(self, XYZ):
-        return XYZ if not self.lift else (XYZ[0], XYZ[1], f"{XYZ[2]}+{fmt(self.lift)}")
-
     def surface(self, XYZ, U, V, color, ref=None, orient='closed', opacity=None, hidden=False):
         """XYZ: three Arch expressions; U, V: (name, lo, hi); orient: how to decide the outside.
         'closed' outward from the centroid, ('point', p) away from p, ('dir', d) toward d,
         ('tube', 'u'|'v') away from the axis of rings at fixed u (or v), None = keep."""
         if self.turn:
             XYZ = self._turn(XYZ)
-        X, Y, Z = self._lift(XYZ)
+        X, Y, Z = XYZ
         u, u0, u1 = U
         v, v0, v1 = V
         lo_hi = [float(eval(self.py(fmt(t)), self.ns)) for t in (u0, u1, v0, v1)]
@@ -307,7 +294,7 @@ class Scene:
     def curve(self, XYZ, T, color, ref=None, thickness=2):
         if self.turn:
             XYZ = self._turn(XYZ)
-        X, Y, Z = self._lift(XYZ)
+        X, Y, Z = XYZ
         t, t0, t1 = T
         opts = [f"color={color}", f"thickness={thickness}"]
         if ref:
