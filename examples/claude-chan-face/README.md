@@ -90,11 +90,12 @@ The ears are separate shells. Each is a pear-shaped outline in its own frame on 
 
 ## What is on the face
 
-- Almond-shaped amber eyes, as on the sheet: a dark brown rim, an amber-brown body, lighter lower bands, a dark top under the lid. The pupil sits high, just under the upper lid, with a small highlight beside it and a smaller one lower down, both on the viewer's left.
-- A thick, dark, nearly flat upper lash line, heaviest over its outer two thirds, ending in a pointed wing straight out past the corner, with a short flick below it. There is also a thin lower lash line on the outer half and a soft lid crease.
+- Amber eyes shaped as on the sheet: a nearly straight upper lid with both corners up near it, and the eye hanging below it like a bowl. The iris has a dark brown rim, an amber-brown body, lighter lower bands, a dark top under the lid. The pupil sits high, just under the upper lid, with a small highlight beside it and a smaller one lower down, both on the viewer's left.
+- A thick, dark, flat upper lash line. It starts thick at the inner corner with a short hook down into it, and ends in a short wing past the outer corner, pointing out and a little down. The lower lash line thickens toward the outer corner, where it meets the wing. There is also a soft lid crease.
 - Thin, nearly straight orange eyebrows, a little thicker at the inner end.
 - Soft three-step blush on the cheeks, a small pointed nose made by shape alone, and a small closed smile.
 - A V-shaped jaw with a rounded chin, ears, and a slender neck.
+- She looks up by 10°, measured from the sheet. In its portraits the nose sits 0.31 of the way from the eye line to the chin, and the mouth 0.59–0.63. With the head level, the model measured 0.40 and 0.64, which reads as looking down. Looking up 10° and a slightly higher nose give 0.335 and 0.60. The saved views are near eye level (2°).
 
 ## Expressions
 
@@ -111,12 +112,12 @@ Each expression on the character sheet is a set of changes to a few numbers of t
 | `mouth` | The mouth line: corner lift, an upturn at the very ends (`hook`), asymmetry, thickness and taper. |
 | `cheek` | Height and size of the cheek bumps in `hr`, so the skin itself changes shape. |
 | `blush_v`, `blush` | Height of the blush and how many of its three steps are drawn. |
-| `tilt` | Head tilt toward her right, in degrees. |
+| `tilt`, `pitch` | Head tilt toward her right and how far she looks up, in degrees (`pitch` is 10 for every expression). |
 | `view` | The saved camera angle. |
 
-**1. 自然微笑, natural smile** (`--expression natural-smile`). The upper lids relax down over the top of the iris and the lower lids rise, so the eyes are calm and heavy-lidded. A light fold shows under each eye. The irises sit a little toward the nose, more in her left eye, as on the sheet, so she looks at the viewer. The pupils show as dark spots just under the lids. The mouth is a nearly straight, slightly longer closed line whose ends turn up a little, her left end more. The cheeks are fuller and higher, with only a trace of blush. The head is tilted 12° toward her right, and the camera is a little to her left, as in the sheet's portrait.
+**1. 自然微笑, natural smile** (`--expression natural-smile`). The upper lids relax down over the top of the iris and the lower lids rise, so the eyes are calm and heavy-lidded. A light fold shows under each eye. The irises sit a little toward the nose, more in her left eye, as on the sheet, so she looks at the viewer. The pupils show as dark spots just under the lids. The mouth is a nearly straight, slightly longer closed line whose ends turn up a little, her left end more. The cheeks are fuller and higher, with only a trace of blush. The head is tilted 12° toward her right as well as looking up, and the camera is a little to her left, as in the sheet's portrait.
 
-The tilt is cheap for the head. A rotation `R` about a point at the top of the neck turns `t + R·(hr(D)·D)` into `t + hr(D)·(R·D)`, so only the direction factor changes. The neck can't turn rigidly, or it would lean. So the tiles that reach into the neck use an angle that grows smoothly with height, `θ(z) = θ·smoothstep(z)`, from still at z = −1.5 to fully turned at z = −0.85. The neck bends, and those tiles still meet the head's tiles exactly.
+The pose is cheap for the head. A rotation `R` (look up, then tilt) about a point at the top of the neck turns `t + R·(hr(D)·D)` into `t + hr(D)·(R·D)`, so only the direction factor changes. The look-up turns the neck with the head. For the tilt, the neck can't turn rigidly, or it would lean. So the tiles that reach into the neck use a tilt angle that grows smoothly with height, `θ(z) = θ·smoothstep(z)`, from still at z = −1.5 to fully turned at z = −0.85. The neck bends, and those tiles still meet the head's tiles exactly.
 
 ## Rebuilding
 

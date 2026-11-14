@@ -285,7 +285,7 @@ HEAD = Union([Union([cranium, lowerface], 24), neck], 14)
 CHEEKS = Bump(0.50, -0.40, 0.23, 0.18, 0.02, sym=True)   # set by the expression
 BUMPS = [
     Bump(0.39, -0.16, 0.14, 0.10, -0.025, sym=True),             # eye sockets
-    Bump(0.0, -0.44, 0.04, 0.09, 0.05, svb=0.035, g=0.8),        # nose
+    Bump(0.0, -0.42, 0.04, 0.09, 0.05, svb=0.035, g=0.8),        # nose
     CHEEKS,                                                      # cheeks
     Bump(0.0, -0.68, 0.17, 0.10, 0.015),                         # lips
     Bump(0.0, -1.45, 0.22, 0.32, 0.05),                          # chin
@@ -467,22 +467,26 @@ def clamp(v, lo, hi):
 # The left eye, in front-face coordinates.  t = 0 at the inner corner, 1 at the outer corner;
 # the lid curves give v relative to EYE_V.
 EYE_U0, EYE_UW, EYE_V = 0.155, 0.46, -0.16
-LID_UP_PTS = [(0, 0.0), (0.06, 0.045), (0.18, 0.085), (0.4, 0.105), (0.6, 0.11), (0.8, 0.1),
-              (0.92, 0.072), (1.0, 0.035)]
-LID_LO_PTS = [(0, 0.0), (0.12, -0.04), (0.35, -0.075), (0.55, -0.085), (0.75, -0.075),
-              (0.9, -0.045), (1.0, 0.035)]
+# As on the sheet, the upper lid is nearly straight, with both corners up near it, and the eye
+# hangs below it like a bowl.
+LID_UP_PTS = [(0, 0.06), (0.1, 0.085), (0.3, 0.098), (0.5, 0.103), (0.7, 0.1), (0.9, 0.09),
+              (1.0, 0.075)]
+LID_LO_PTS = [(0, 0.06), (0.06, 0.0), (0.2, -0.05), (0.4, -0.075), (0.6, -0.08), (0.8, -0.06),
+              (0.93, -0.01), (1.0, 0.075)]
 BROW_PTS = [(-0.05, 0.255), (0.25, 0.275), (0.55, 0.283), (0.85, 0.275), (1.05, 0.262)]
-LASH_TH = Curve([(0, 0.006), (0.1, 0.016), (0.3, 0.026), (0.6, 0.034), (0.85, 0.04),
+LASH_TH = Curve([(0, 0.012), (0.08, 0.022), (0.3, 0.028), (0.6, 0.034), (0.85, 0.04),
                  (1.0, 0.04)], deg=4, name='lasht')
 IRIS = dict(t=0.47, dv=0.03, a=0.105, b=0.13)
 MOUTH_V = -0.68
 
 # ---------------------------------------------------------------- pose
-# A head tilt turns the head rigidly about a point at the top of the neck, P -> t + R P, which
-# for the skin is t + hr(D) * (R D): only the direction changes, so it costs nothing.  The
-# neck bends smoothly instead, from still at z = NECK_BEND[0] to fully turned at NECK_BEND[1].
+# The head turns rigidly about a point at the top of the neck, P -> t + R P, which for the skin
+# is t + hr(D) * (R D): only the direction changes, so it costs nothing.  R looks up by `pitch`
+# and then tilts toward her right by `tilt`.  For the tilt the neck bends smoothly instead,
+# from still at z = NECK_BEND[0] to fully turned at NECK_BEND[1]; the look-up turns it whole.
 NECK_BEND = (-1.5, -0.85)
-POSE = dict(R=np.eye(3), t=np.zeros(3), angle=0.0)
+NECK_TOP = np.array([-0.25, 0, NECK_BEND[1]])      # the point the head turns about
+POSE = dict(R=np.eye(3), t=np.zeros(3), P=np.eye(3), tp=np.zeros(3), angle=0.0)
 
 
 def rot_x(deg):
@@ -490,33 +494,47 @@ def rot_x(deg):
     return np.array([[1, 0, 0], [0, c, -s], [0, s, c]])
 
 
-def set_pose(tilt):
-    """Tilt the head toward her right by tilt degrees (a roll about the forward axis)."""
-    R = rot_x(tilt)
-    pivot = np.array([0, 0, NECK_BEND[1]])
-    POSE.update(R=R, t=pivot - R @ pivot, angle=math.radians(tilt))
+def rot_up(deg):
+    """Look up by deg degrees: the face (+x) turns toward +z."""
+    c, s = math.cos(math.radians(deg)), math.sin(math.radians(deg))
+    return np.array([[c, 0, -s], [0, 1, 0], [s, 0, c]])
 
 
-def posed(h, D):
-    """The coordinates of h * D after the tilt; h is a radius and D three direction strings."""
-    if not POSE['angle']:
+def set_pose(tilt, pitch=0.0):
+    """Look up by pitch degrees, then tilt toward her right by tilt degrees."""
+    P = rot_up(pitch)
+    R = rot_x(tilt) @ P
+    POSE.update(R=R, t=NECK_TOP - R @ NECK_TOP, P=P, tp=NECK_TOP - P @ NECK_TOP,
+                angle=math.radians(tilt))
+
+
+def affine(h, D, M, t):
+    """The strings of t + M (h * D)."""
+    if np.allclose(M, np.eye(3)) and np.allclose(t, 0):
         return [mul(h, c) for c in D]
     out = []
     for i in range(3):
-        rd = lin(POSE['R'][i], D)
+        rd = lin(M[i], D)
         p = h if rd == '1' else f'{h}*({rd})'
-        out.append(f'{num(POSE["t"][i])}+{p}' if abs(POSE['t'][i]) > 1e-9 else p)
+        out.append(f'{num(t[i])}+{p}' if abs(t[i]) > 1e-9 else p)
     return out
 
 
+def posed(h, D):
+    """The coordinates of h * D in the pose; h is a radius and D three direction strings."""
+    return affine(h, D, POSE['R'], POSE['t'])
+
+
 def bent(h, D):
-    """Like posed, for the neck: the tilt angle grows smoothly with the height z."""
+    """Like posed, for the neck: the look-up is applied whole, and then the tilt, whose angle
+    grows smoothly with the height z the point had before the pose."""
     z0, z1 = NECK_BEND
-    X, Y, Z = (mul(h, c) for c in D)
+    Z = mul(h, D[2])
+    X1, Y1, Z1 = affine(h, D, POSE['P'], POSE['tp'])
     c = f'min(max(({Z}-({num(z0)}))*{num(1 / (z1 - z0))},0),1)'
     th = f'{num(POSE["angle"], 6)}*{c}^2*(3-2*{c})'
-    return [X, f'({Y})*cos({th})-({Z}-({num(z1)}))*sin({th})',
-            f'{num(z1)}+({Y})*sin({th})+({Z}-({num(z1)}))*cos({th})']
+    return [X1, f'({Y1})*cos({th})-({Z1}-({num(z1)}))*sin({th})',
+            f'{num(z1)}+({Y1})*sin({th})+({Z1}-({num(z1)}))*cos({th})']
 
 # ---------------------------------------------------------------- expressions
 # Each expression on the sheet changes a few numbers of the face.  'base' is the face as first
@@ -535,17 +553,18 @@ BASE = dict(
     blush_v=-0.42,
     blush=3,               # how many of the three blush steps are drawn (0 = none)
     tilt=0.0,              # head tilt toward her right, degrees
-    view=(22, 6),          # azimuth and elevation of the saved view
+    pitch=10.0,            # how far she looks up, degrees (measured from the sheet)
+    view=(22, 2),          # azimuth and elevation of the saved view
 )
 EXPRESSIONS = {
     'base': {},
     # 自然微笑, the first expression on the sheet: relaxed upper lids, lower lids pushed up by
     # the cheeks, eyes on the viewer, a closed smile, the head tilted toward her right.
     'natural-smile': dict(
-        title='Claude Chan - natural smile', lid_up=-0.025, lid_lo=0.025, under_eye=True,
+        title='Claude Chan - natural smile', lid_up=-0.012, lid_lo=0.022, under_eye=True,
         gaze=(-0.014, 0.0), converge=0.009, brow_dv=0.005,
         mouth=dict(w=0.12, lift=0.006, hook=0.005, asym=0.004, th=0.008, taper=0.35),
-        cheek=(-0.37, 0.03), blush_v=-0.40, blush=1, tilt=12, view=(8, 6)),
+        cheek=(-0.37, 0.03), blush_v=-0.40, blush=1, tilt=12, view=(8, 2)),
 }
 X = dict(BASE)
 
@@ -553,10 +572,10 @@ X = dict(BASE)
 def lid_curve(pts, dv, name):
     """A lid curve through pts, its middle moved by dv (the corners stay)."""
     if not dv:
-        return Curve(pts, deg=7, name=name)
+        return Curve(pts, deg=9, name=name)
     t, y = zip(*pts)
     ts = np.linspace(0, 1, 17)
-    return Curve(list(zip(ts, spline(t, y)(ts) + dv * np.sin(np.pi * ts) ** 0.8)), deg=7,
+    return Curve(list(zip(ts, spline(t, y)(ts) + dv * np.sin(np.pi * ts) ** 0.8)), deg=9,
                  name=name)
 
 
@@ -567,7 +586,7 @@ def set_expression(name):
     LID_LO = lid_curve(LID_LO_PTS, X['lid_lo'], 'lidl')
     BROW = Curve([(t, v + X['brow_dv']) for t, v in BROW_PTS], deg=4, name='brow')
     CHEEKS.v0, CHEEKS.amp = X['cheek']
-    set_pose(X['tilt'])
+    set_pose(X['tilt'], X['pitch'])
 
 
 set_expression('base')
@@ -647,18 +666,21 @@ def eye(mirror):
     # upper lash line: a raised band along the upper lid, thickest at the outer corner
     ridge = f'{lv(10)}+0.01*sin(pi*w)'
     decal(U, f'{top}-0.009+w*(lasht(s)+0.009)', ridge, s, w, '#2e1c18', mirror)
-    # its wing past the outer corner, and a smaller lash below it
+    # a short hook down into the inner corner
+    corner = lid_point(0.0)[1]
+    quad_patch(lid_point(0.0, 0.012), lid_point(0.07, -0.009), (EYE_U0 - 0.006, corner - 0.03),
+               (EYE_U0 - 0.006, corner - 0.03), lv(10), '#2e1c18', mirror)
+    # its wing past the outer corner, pointing out and a little down
     v1 = lid_point(1.0)[1]
-    lo0, hi0, tip, ln = v1 - 0.009, v1 + LASH_TH.c @ np.ones(len(LASH_TH.c)), v1 + 0.012, 0.2
+    lo0, hi0, tip, ln = v1 - 0.009, v1 + LASH_TH.c @ np.ones(len(LASH_TH.c)), v1 - 0.004, 0.14
     f = f'(s-1)*{num(1 / ln)}'
     lo = f'{num(lo0)}+{f}*{num(tip - lo0)}'
     hi = f'{num(hi0)}+{f}^0.75*{num(tip - hi0)}'
     decal(U, f'{lo}+w*({hi}-({lo}))', ridge, ('s', 1, 1 + ln), w, '#2e1c18', mirror)
-    quad_patch(lid_point(0.86, -0.008), lid_point(0.96, -0.006), (EYE_U0 + EYE_UW * 1.1, v1 - 0.04),
-               (EYE_U0 + EYE_UW * 1.1, v1 - 0.04), lv(10), '#2e1c18', mirror)
-    # lower lash line on the outer half, and the crease of the upper lid
+    # lower lash line on the outer half, thickening toward the outer corner where it meets the
+    # wing; and the crease of the upper lid
     f = '(s-0.4)*1.6667'
-    decal(U, f'{bot}+0.004-w*0.024*{f}*(1-{f})^0.6', lv(10), ('s', 0.4, 1), w, '#7a4030',
+    decal(U, f'{bot}+0.004-w*0.03*{f}^1.5*(1-{f})^0.3', lv(10), ('s', 0.4, 1), w, '#6e3a2a',
           mirror)
     f = '(s-0.22)*1.3699'
     decal(U, f'{top}+lasht(s)+0.026+w*0.008*4*{f}*(1-{f})', lv(2), ('s', 0.22, 0.95), w,
